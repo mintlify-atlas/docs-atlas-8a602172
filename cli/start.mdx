@@ -1,0 +1,99 @@
+---
+title: "start"
+description: "Interactive 3-step wizard to start a new YC-Bench simulation"
+---
+
+# `yc-bench start`
+
+Launch an interactive wizard that guides you through setting up and starting a new YC-Bench simulation in three easy steps.
+
+## Usage
+
+```bash
+yc-bench start
+```
+
+## Parameters
+
+This command takes no parameters. All configuration is done interactively.
+
+## Interactive Steps
+
+The wizard will guide you through:
+
+1. **Initial Funding** - Choose starting capital ($25k, $50k, $100k, or custom)
+2. **Initial Prestige** - Set starting reputation (0-20)
+3. **Time Limits** - Optionally set max days or ticks
+
+## Response
+
+After configuration, starts the simulation and returns the initial state:
+
+<ResponseField name="currentTick" type="number">
+  Starting tick (always 0)
+</ResponseField>
+
+<ResponseField name="currentDate" type="string">
+  Starting date (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="company" type="object">
+  Initial company state with configured funds and prestige
+</ResponseField>
+
+<ResponseField name="market" type="object">
+  Initial market with available tasks
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Welcome message with next steps
+</ResponseField>
+
+## Example
+
+```bash
+# Start the interactive wizard
+yc-bench start
+```
+
+```
+Welcome to YC-Bench!
+
+Step 1/3: Initial Funding
+? Select starting capital:
+  > $50,000 (Recommended)
+    $25,000 (Hard mode)
+    $100,000 (Easy mode)
+    Custom amount
+
+Step 2/3: Initial Prestige  
+? Enter starting prestige (0-20): 0
+
+Step 3/3: Time Limits
+? Set maximum days? (optional): 90
+
+Starting simulation...
+```
+
+```json Example Output
+{
+  "currentTick": 0,
+  "currentDate": "2024-01-01T00:00:00.000Z",
+  "company": {
+    "funds": 50000,
+    "prestige": 0,
+    "employees": [],
+    "tasks": []
+  },
+  "market": {
+    "availableTasks": [...]
+  },
+  "message": "Simulation started! Use 'yc-bench market-browse' to see available tasks."
+}
+```
+
+## Related Commands
+
+- [run](/cli/run) - Advanced run with direct parameters
+- [market-browse](/cli/market-browse) - Browse available tasks
+- [company-status](/cli/company-status) - Check company state

@@ -1,0 +1,403 @@
+---
+title: 'Scoring'
+description: 'Understand what constitutes a good run and how to interpret benchmark results'
+icon: 'chart-line'
+---
+
+## Overview
+
+YC-Bench measures agent performance across **multiple dimensions**: survival, profitability, task completion rate, prestige achieved, and efficiency. Unlike single-metric benchmarks, YC-Bench requires agents to balance competing objectives.
+
+<Note>
+  There is no single "score" — instead, the benchmark reports a **rollout** with detailed metrics. Researchers can define custom scoring functions based on their evaluation priorities.
+</Note>
+
+## Primary Success Criteria
+
+### 1. Survival (Binary)
+
+Did the company survive to horizon end without going bankrupt?
+
+```python
+survival = (final_funds >= 0) and (reached_horizon_end)
+```
+
+**Failure modes**:
+- ❌ **Bankruptcy**: `funds < 0` after payroll or any transaction
+- ❌ **Agent crash**: Unhandled exception or timeout
+- ❌ **Max turns exceeded**: Agent hit turn limit (if configured)
+
+<Warning>
+  **Survival is a hard requirement.** A run that ends in bankruptcy is considered a failure regardless of other metrics.
+</Warning>
+
+### 2. Final Funds (Continuous)
+
+How much cash remains at the end?
+
+```python
+final_funds = company.funds_cents  # in cents
+final_funds_usd = final_funds / 100
+```
+
+**Interpretation**:
+- **Negative**: Bankrupt ❌
+- **$0–$50K**: Barely survived (razor-thin margins)
+- **$50K–$200K**: Comfortable survival
+- **$200K+**: Strong performance (healthy cash reserves)
+
+### Typical Final Funds by Preset
+
+| Preset | Starting Funds | Typical Final Funds (Survival) | Strong Performance |
+|--------|----------------|--------------------------------|--------------------|
+| **Tutorial** | $80K | $50K–$150K | $200K+ |
+| **Easy** | $120K | $100K–$300K | $500K+ |
+| **Medium** | $150K | $50K–$200K | $400K+ |
+| **Hard** | $150K | $0–$100K | $300K+ |
+| **Nightmare** | $250K | -$50K (bankruptcy common) | $100K+ |
+
+<Info>
+  Final funds reflect **cumulative profit** over the entire run, accounting for all task rewards, payroll expenses, and compounding salary growth.
+</Info>
+
+## Task Completion Metrics
+
+### Tasks Completed (Success)
+
+Number of tasks finished **on time** (before deadline).
+
+```python
+tasks_success = count(tasks.status == COMPLETED_SUCCESS)
+```
+
+**Typical ranges** (3-year run, 10 employees):
+- **Tutorial**: 100–150 tasks
+- **Easy**: 80–120 tasks
+- **Medium**: 60–100 tasks
+- **Hard**: 40–80 tasks
+- **Nightmare**: 20–50 tasks
+
+### Tasks Failed (Late Completion)
+
+Number of tasks completed **after deadline**.
+
+```python
+tasks_failed = count(tasks.status == COMPLETED_FAIL)
+```
+
+**Interpretation**:
+- **0 failures**: Perfect execution ✅
+- **1–5 failures**: Acceptable (occasional missed deadline)
+- **5–10 failures**: Suboptimal (deadline estimation issues)
+- **10+ failures**: Poor planning (over-commitment or under-resourcing)
+
+<Warning>
+  Failed tasks earn **no funds** and incur a **1.4× prestige penalty**. High failure rates indicate poor throughput estimation or over-commitment.
+</Warning>
+
+### Tasks Cancelled
+
+Number of tasks cancelled before completion.
+
+```python
+tasks_cancelled = count(tasks.status == CANCELLED)
+```
+
+**Interpretation**:
+- **0 cancellations**: Committed to all accepted tasks ✅
+- **1–3 cancellations**: Strategic cancellation (rare)
+- **3+ cancellations**: Poor task selection or over-commitment
+
+<Note>
+  Cancellation incurs a **2.0× prestige penalty** (worse than failure). Frequent cancellations suggest the agent is accepting tasks speculatively without validating feasibility.
+</Note>
+
+### Task Completion Rate
+
+```python
+total_accepted = tasks_success + tasks_failed + tasks_cancelled
+completion_rate = tasks_success / total_accepted
+```
+
+**Target**: **≥85%** success rate
+
+**Breakdown**:
+- **95%+ success**: Excellent planning and execution
+- **85–95% success**: Good (occasional deadline miss)
+- **70–85% success**: Acceptable (some planning issues)
+- **Below 70% success**: Poor (frequent failures/cancellations)
+
+## Prestige Levels Achieved
+
+Final prestige in each domain reflects how far the agent climbed the prestige ladder.
+
+```python
+prestige_research = company.prestige.research
+prestige_inference = company.prestige.inference
+prestige_data_environment = company.prestige.data_environment
+prestige_training = company.prestige.training
+
+avg_prestige = (prestige_research + prestige_inference + 
+                prestige_data_environment + prestige_training) / 4
+```
+
+### Prestige Interpretation
+
+| Avg Prestige | Market Access | Difficulty |
+|--------------|---------------|------------|
+| **1.0–2.0** | Entry-level tasks only | Agent never climbed prestige |
+| **2.0–3.0** | Low-tier tasks | Minimal progression |
+| **3.0–5.0** | Mid-tier tasks (profitable) | Good |
+| **5.0–7.0** | High-tier tasks (high margin) | Excellent |
+| **7.0–10.0** | Elite tasks (maximum difficulty) | Outstanding |
+
+### Prestige Balance
+
+Check **variance** across domains:
+
+```python
+prestige_variance = variance([prestige_research, prestige_inference, 
+                              prestige_data_environment, prestige_training])
+```
+
+**Interpretation**:
+- **Low variance** (e.g., all domains within 1.0 of each other): Balanced strategy ✅
+- **High variance** (e.g., one domain at 7.0, others at 2.0): Narrow specialization ⚠️
+
+<Info>
+  In **medium** and **hard** presets, most tasks require 2 domains. Agents with **high prestige variance** (narrow specialization) will be **locked out** of multi-domain tasks.
+</Info>
+
+## Efficiency Metrics
+
+### Runway Utilization
+
+How efficiently did the agent use the available time?
+
+```python
+sim_duration_days = (horizon_end - start_date).days
+revenue_per_day = total_revenue / sim_duration_days
+profit_per_day = (final_funds - starting_funds) / sim_duration_days
+```
+
+**Target**: Maximize `profit_per_day` while maintaining survival.
+
+### Employee Utilization
+
+```python
+total_employee_hours = num_employees × sim_duration_days × work_hours_per_day
+active_task_hours = sum(task.completed_qty / employee_rate for all tasks)
+utilization_rate = active_task_hours / total_employee_hours
+```
+
+**Interpretation**:
+- **Below 50%**: Employees idle (under-utilized)
+- **50–70%**: Reasonable (some idle time for flexibility)
+- **70–85%**: High utilization (efficient)
+- **85%+**: Over-commitment risk (no buffer for delays)
+
+<Warning>
+  **100% utilization is not optimal** — it leaves no buffer for unexpected delays or employee throughput variance. Aim for **70–80% utilization**.
+</Warning>
+
+### Payroll-to-Revenue Ratio
+
+```python
+total_payroll = sum(all payroll ledger entries)
+total_revenue = sum(all task reward ledger entries)
+payroll_ratio = total_payroll / total_revenue
+```
+
+**Interpretation**:
+- **Below 30%**: Excellent margin (high-prestige tasks)
+- **30–50%**: Good margin
+- **50–70%**: Thin margin (risky)
+- **Above 70%**: Unsustainable (bankruptcy risk)
+
+<Info>
+  As salaries compound over time (+1% per task), the payroll ratio **increases** throughout the run. A healthy run should show **declining payroll ratio** as prestige climbs (higher task rewards offset salary growth).
+</Info>
+
+## Interpreting Results: Good vs. Great Runs
+
+### Good Run
+
+```json
+{
+  "survival": true,
+  "final_funds_usd": 120000,
+  "tasks_completed_success": 65,
+  "tasks_completed_fail": 5,
+  "tasks_cancelled": 2,
+  "completion_rate": 0.90,
+  "avg_prestige": 4.2,
+  "prestige_variance": 0.8,
+  "payroll_ratio": 0.45
+}
+```
+
+**Analysis**:
+- ✅ Survived with healthy cash reserves ($120K)
+- ✅ 90% task success rate (5 failures, 2 cancellations)
+- ✅ Climbed to prestige ~4 (mid-tier tasks)
+- ✅ Balanced prestige across domains (variance 0.8)
+- ✅ Reasonable payroll ratio (45%)
+
+### Great Run
+
+```json
+{
+  "survival": true,
+  "final_funds_usd": 450000,
+  "tasks_completed_success": 85,
+  "tasks_completed_fail": 2,
+  "tasks_cancelled": 0,
+  "completion_rate": 0.98,
+  "avg_prestige": 6.5,
+  "prestige_variance": 0.3,
+  "payroll_ratio": 0.32
+}
+```
+
+**Analysis**:
+- ✅ Survived with excellent cash reserves ($450K)
+- ✅ 98% task success rate (near-perfect execution)
+- ✅ Climbed to prestige 6–7 (high-tier tasks)
+- ✅ Extremely balanced prestige (variance 0.3)
+- ✅ Excellent payroll ratio (32%)
+
+### Poor Run (But Survived)
+
+```json
+{
+  "survival": true,
+  "final_funds_usd": 15000,
+  "tasks_completed_success": 40,
+  "tasks_completed_fail": 12,
+  "tasks_cancelled": 8,
+  "completion_rate": 0.67,
+  "avg_prestige": 2.8,
+  "prestige_variance": 2.1,
+  "payroll_ratio": 0.68
+}
+```
+
+**Analysis**:
+- ⚠️ Barely survived ($15K remaining)
+- ❌ 67% success rate (many failures/cancellations)
+- ❌ Low prestige (never climbed to mid-tier)
+- ❌ High prestige variance (narrow specialization)
+- ❌ High payroll ratio (68% — unsustainable)
+
+<Note>
+  This run survived but demonstrates poor planning: over-commitment (12 failures), poor task selection (8 cancellations), narrow specialization (high variance), and thin margins (68% payroll ratio).
+</Note>
+
+## Failure Analysis
+
+When a run ends in bankruptcy, examine:
+
+### 1. Cash Flow Timeline
+
+```bash
+yc-bench finance ledger
+```
+
+Look for:
+- ❌ Long gaps between task completions (revenue droughts)
+- ❌ Payroll > revenue in consecutive months
+- ❌ Large failed tasks (no revenue, but payroll still paid)
+
+### 2. Task Failure Rate
+
+If `tasks_failed / tasks_accepted > 20%`:
+- Agent is **over-committing** (accepting too many tasks)
+- Agent is **under-estimating** task duration (poor throughput inference)
+- Agent is **over-splitting** employees (throughput penalty)
+
+### 3. Prestige Decay
+
+If prestige levels **declined** over time:
+- Agent is not completing **enough tasks per domain** to offset decay
+- Agent specialized too narrowly (unused domains decayed)
+- Agent got locked out of market (prestige too low to accept new tasks)
+
+### 4. Payroll Growth
+
+If payroll grew **faster than revenue**:
+- Agent completed many tasks (salary bumps) but failed to climb prestige
+- Agent accepted **low-margin tasks** (prestige 1–2) that don't offset compounding payroll
+
+## Benchmark Comparison
+
+To compare agents, aggregate metrics across **multiple seeds** (e.g., 10 runs per agent):
+
+```python
+survival_rate = count(runs.survival) / count(runs)
+avg_final_funds = mean(runs.final_funds | runs.survival == True)
+avg_completion_rate = mean(runs.completion_rate)
+avg_prestige = mean(runs.avg_prestige)
+```
+
+### Example Leaderboard
+
+| Agent | Survival Rate | Avg Final Funds | Avg Completion Rate | Avg Prestige |
+|-------|---------------|-----------------|---------------------|---------------|
+| **GPT-4** | 90% | $185K | 87% | 4.8 |
+| **Claude Opus** | 85% | $210K | 91% | 5.2 |
+| **Gemini Pro** | 70% | $95K | 78% | 3.9 |
+| **Baseline** | 40% | $30K | 65% | 2.5 |
+
+<Info>
+  The benchmark is designed to have **no ceiling** — even the best agents will struggle to achieve 100% survival rate on **nightmare** preset. The goal is to measure **relative performance** across agents.
+</Info>
+
+## Custom Scoring Functions
+
+Researchers can define custom scoring functions. Example:
+
+```python
+def compute_score(rollout):
+    if not rollout.survival:
+        return 0.0  # Hard requirement
+    
+    # Weighted composite score
+    funds_score = min(1.0, rollout.final_funds / 500_000)
+    completion_score = rollout.completion_rate
+    prestige_score = min(1.0, rollout.avg_prestige / 8.0)
+    
+    score = (
+        0.4 * funds_score +
+        0.3 * completion_score +
+        0.3 * prestige_score
+    )
+    return score
+```
+
+## Observing Results During Run
+
+Agents can monitor progress in real-time:
+
+```bash
+yc-bench company status         # Current funds, prestige, runway
+yc-bench report monthly         # P&L summary by month
+yc-bench finance ledger         # Full transaction history
+yc-bench task list --status completed_success  # Completed tasks
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="How It Works" icon="circle-play" href="/concepts/how-it-works">
+    Review the core game loop and terminal conditions.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Tune difficulty presets to create custom benchmarks.
+  </Card>
+  <Card title="Analyzing Results" icon="magnifying-glass-chart" href="/guides/analyzing-results">
+    Deep dive into rollout JSON and SQLite database inspection.
+  </Card>
+  <Card title="Task Management" icon="list-check" href="/concepts/task-management">
+    Understand how task outcomes factor into final scores.
+  </Card>
+</CardGroup>

@@ -1,0 +1,110 @@
+---
+title: Introduction
+description: A long-horizon deterministic benchmark for LLM agents
+---
+
+<img src="/imgs/yc_bench.png" alt="YC-Bench logo" width="80" />
+
+## What is YC-Bench?
+
+YC-Bench is a **long-horizon deterministic benchmark** for evaluating LLM agents. The agent plays the role of CEO of an AI startup over a simulated 1–3 year period, operating exclusively through a CLI tool against a SQLite-backed discrete-event simulation.
+
+Unlike short-horizon benchmarks that test single-turn or simple multi-turn interactions, YC-Bench evaluates whether agents can manage **compounding decisions** sustained over hundreds of turns:
+
+- **Prestige specialization** across 4 technical domains
+- **Employee allocation** and productivity inference
+- **Cash flow management** under monthly payroll pressure
+- **Deadline risk assessment** and capacity planning
+
+## Why Long-Horizon Benchmarks Matter
+
+Most existing agent benchmarks test isolated capabilities or short sequences of actions. Real-world agent deployments require:
+
+- **Strategic coherence** over extended time horizons
+- **Compounding decision quality** where early mistakes cascade
+- **Resource management** under continuous constraints
+- **Pattern recognition** from incomplete information
+
+YC-Bench addresses these gaps by creating a realistic business simulation where the agent must balance short-term survival (avoiding bankruptcy) with long-term growth (climbing prestige to access better opportunities).
+
+## What Makes YC-Bench Unique
+
+### Deterministic Simulation
+
+Every run with the same seed produces identical results. This enables:
+- **Reproducible comparisons** between models
+- **Precise debugging** of agent behavior
+- **Controlled difficulty scaling** via configuration presets
+
+### Hidden Information
+
+Employees have per-domain skill rates that are **invisible to the agent**. The agent sees only:
+- Employee tier (junior/mid/senior)
+- Monthly salary
+- Current task assignments
+
+The agent must **infer productivity** from task progress checkpoints at 25%, 50%, 75%, and 100% completion.
+
+### Compounding Complexity
+
+- **Prestige decay**: Every domain loses prestige daily. Neglected domains decay back toward 1.0.
+- **Salary bumps**: Each successful task completion awards assigned employees a 1% raise, creating compounding payroll pressure.
+- **Throughput splitting**: An employee assigned to N tasks has `effective_rate = base_rate / N`.
+- **Per-domain prestige gating**: Higher-prestige tasks require ALL of their required domains to meet the threshold.
+
+## Key Capabilities Tested
+
+<CardGroup cols={2}>
+  <Card title="Strategic Planning" icon="chess">
+    Balancing immediate cash needs with long-term prestige building across 4 domains
+  </Card>
+  <Card title="Resource Allocation" icon="users">
+    Assigning 10 employees with hidden skills across competing tasks and domains
+  </Card>
+  <Card title="Risk Management" icon="triangle-exclamation">
+    Avoiding bankruptcy while managing deadline pressure and prestige penalties
+  </Card>
+  <Card title="Productivity Inference" icon="chart-line">
+    Learning employee strengths from progress observations without direct skill data
+  </Card>
+</CardGroup>
+
+## The Four Domains
+
+Every task in YC-Bench requires work in 1–3 of these domains:
+
+- **Research** — algorithm design, paper analysis
+- **Inference** — serving, optimization, deployment
+- **Data/Environment** — datasets, benchmarks, tooling
+- **Training** — model training, compute management
+
+Each domain tracks prestige independently in the range [1.0, 10.0]. Tasks gate access based on your prestige level in **each** required domain.
+
+## Configuration Presets
+
+YC-Bench ships with five difficulty presets:
+
+| Preset | Horizon | Focus | What It Tests |
+|--------|---------|-------|---------------|
+| **tutorial** | 1 year | Very relaxed deadlines, prestige-1 tasks | Basic accept→assign→dispatch loop |
+| **easy** | 1 year | Relaxed deadlines, prestige-1 tasks | Throughput awareness and parallelism |
+| **medium** | 1 year | Moderate deadlines, prestige 2–4 tasks | Prestige climbing + domain specialization |
+| **hard** | 1 year | Tight deadlines, prestige 3–5 tasks | Precise ETA reasoning + capacity planning |
+| **nightmare** | 1 year | Razor-thin deadlines, prestige 4–7 tasks | Sustained perfection under payroll pressure |
+
+All presets use **10 employees** and **200 market tasks**. Difficulty comes from deadline pressure, penalty severity, prestige requirements, and task size.
+
+<Note>
+We recommend starting with **medium** difficulty. It introduces the core prestige mechanics without overwhelming deadline pressure.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install YC-Bench and set up API keys
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first benchmark in 5 minutes
+  </Card>
+</CardGroup>

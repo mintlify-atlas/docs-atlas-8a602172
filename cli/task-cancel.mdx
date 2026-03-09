@@ -1,0 +1,110 @@
+---
+title: "task-cancel"
+description: "Cancel a task with prestige penalty"
+---
+
+# `yc-bench task-cancel`
+
+Cancel a planned or in-progress task. Cancelling a task incurs a prestige penalty and frees up the assigned employee.
+
+## Usage
+
+```bash
+yc-bench task-cancel <task-id> [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="task-id" type="string" required>
+  The ID of the task to cancel
+</ParamField>
+
+<ParamField path="--force" type="boolean" optional>
+  Skip confirmation prompt and cancel immediately
+</ParamField>
+
+## Response
+
+Returns cancellation details:
+
+<ResponseField name="taskId" type="string">
+  Cancelled task identifier
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Updated task status ("cancelled")
+</ResponseField>
+
+<ResponseField name="prestigePenalty" type="number">
+  Prestige points lost due to cancellation
+</ResponseField>
+
+<ResponseField name="newPrestige" type="number">
+  Company's prestige after penalty
+</ResponseField>
+
+<ResponseField name="freedEmployee" type="string | null">
+  ID of employee freed from assignment, or null if no employee was assigned
+</ResponseField>
+
+<ResponseField name="partialWorkCompleted" type="number">
+  Percentage of work completed before cancellation (0-100)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Cancellation confirmation
+</ResponseField>
+
+## Example
+
+```bash
+# Cancel a task (will prompt for confirmation)
+yc-bench task-cancel task_123
+```
+
+```bash
+# Cancel without confirmation
+yc-bench task-cancel task_123 --force
+```
+
+```json Example Output
+{
+  "taskId": "task_123",
+  "status": "cancelled",
+  "prestigePenalty": 5,
+  "newPrestige": 8,
+  "freedEmployee": "emp_002",
+  "partialWorkCompleted": 35,
+  "message": "Task cancelled. Lost 5 prestige points. Bob Smith is now available."
+}
+```
+
+## Prestige Penalty
+
+The prestige penalty depends on task status:
+
+- **Planned** (not started) - Small penalty (~2-3 points)
+- **In Progress** - Larger penalty based on task value (~5-10 points)
+- **Near Deadline** - Additional penalty if deadline is close
+
+## When to Cancel
+
+Consider cancelling when:
+
+- Task deadline cannot be met
+- Need to free employee for higher priority work
+- Company cannot afford to wait for payment
+- Task complexity was underestimated
+
+## Error Cases
+
+- **Task not found** - Invalid task ID
+- **Already completed** - Cannot cancel completed tasks
+- **Already cancelled** - Task already cancelled
+
+## Related Commands
+
+- [task-list](/cli/task-list) - List all tasks
+- [task-inspect](/cli/task-inspect) - Check task details
+- [company-status](/cli/company-status) - Check prestige impact
+- [employee-list](/cli/employee-list) - See freed employees

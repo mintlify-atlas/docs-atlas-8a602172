@@ -1,0 +1,136 @@
+---
+title: "task-inspect"
+description: "View detailed information about a specific task"
+---
+
+# `yc-bench task-inspect`
+
+Get comprehensive details about a specific task including requirements, progress, timeline, and assignment information.
+
+## Usage
+
+```bash
+yc-bench task-inspect <task-id>
+```
+
+## Parameters
+
+<ParamField path="task-id" type="string" required>
+  The ID of the task to inspect
+</ParamField>
+
+## Response
+
+Returns detailed task information:
+
+<ResponseField name="id" type="string">
+  Unique task identifier
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Task title/description
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status: planned, in_progress, completed, or cancelled
+</ResponseField>
+
+<ResponseField name="payment" type="number">
+  Payment in dollars upon completion
+</ResponseField>
+
+<ResponseField name="prestigeReward" type="number">
+  Prestige points gained upon completion
+</ResponseField>
+
+<ResponseField name="requiredHours" type="number">
+  Total hours required to complete
+</ResponseField>
+
+<ResponseField name="hoursCompleted" type="number">
+  Hours of work completed so far
+</ResponseField>
+
+<ResponseField name="progress" type="number">
+  Completion percentage (0-100)
+</ResponseField>
+
+<ResponseField name="requiredTier" type="string">
+  Minimum employee tier required
+</ResponseField>
+
+<ResponseField name="assignedEmployee" type="object | null">
+  Details of assigned employee, or null if unassigned
+</ResponseField>
+
+<ResponseField name="acceptedAt" type="string">
+  When task was accepted (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="startedAt" type="string | null">
+  When work began, or null if not started
+</ResponseField>
+
+<ResponseField name="deadline" type="string">
+  Task deadline (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="daysUntilDeadline" type="number">
+  Days remaining until deadline
+</ResponseField>
+
+<ResponseField name="expectedCompletion" type="string | null">
+  Estimated completion date based on current progress
+</ResponseField>
+
+<ResponseField name="onTrack" type="boolean">
+  Whether task is on track to meet deadline
+</ResponseField>
+
+## Example
+
+```bash
+# Inspect a specific task
+yc-bench task-inspect task_123
+```
+
+```json Example Output
+{
+  "id": "task_123",
+  "title": "Build React dashboard for analytics",
+  "status": "in_progress",
+  "payment": 8000,
+  "prestigeReward": 3,
+  "requiredHours": 120,
+  "hoursCompleted": 54,
+  "progress": 45,
+  "requiredTier": "mid",
+  "assignedEmployee": {
+    "id": "emp_002",
+    "name": "Bob Smith",
+    "tier": "mid",
+    "productivity": 0.95
+  },
+  "acceptedAt": "2024-01-10T00:00:00.000Z",
+  "startedAt": "2024-01-15T00:00:00.000Z",
+  "deadline": "2024-02-15T00:00:00.000Z",
+  "daysUntilDeadline": 20,
+  "expectedCompletion": "2024-02-12T00:00:00.000Z",
+  "onTrack": true
+}
+```
+
+## Use Cases
+
+- Monitor task progress and timeline
+- Check if task will meet deadline
+- Verify employee assignment and productivity
+- Evaluate task value (payment vs. effort)
+- Track completion percentage
+
+## Related Commands
+
+- [task-list](/cli/task-list) - List all tasks
+- [task-assign](/cli/task-assign) - Assign employee to task
+- [task-cancel](/cli/task-cancel) - Cancel task if needed
+- [sim-resume](/cli/sim-resume) - Advance to completion

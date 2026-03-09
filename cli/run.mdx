@@ -1,0 +1,99 @@
+---
+title: "run"
+description: "Run YC-Bench simulation with full control over parameters"
+---
+
+# `yc-bench run`
+
+Execute a complete YC-Bench simulation run with customizable parameters for initial funding, prestige, time limits, and output options.
+
+## Usage
+
+```bash
+yc-bench run [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="--initial-funds" type="number" optional>
+  Starting capital in dollars. Defaults to $50,000.
+</ParamField>
+
+<ParamField path="--initial-prestige" type="number" optional>
+  Starting prestige score. Affects available tasks and hiring options. Defaults to 0.
+</ParamField>
+
+<ParamField path="--max-ticks" type="number" optional>
+  Maximum simulation ticks (time steps) before auto-termination. No default limit.
+</ParamField>
+
+<ParamField path="--max-days" type="number" optional>
+  Maximum simulation days before auto-termination. No default limit.
+</ParamField>
+
+<ParamField path="--output" type="string" optional>
+  Path to save final simulation state as JSON file.
+</ParamField>
+
+<ParamField path="--verbose" type="boolean" optional>
+  Enable detailed logging output during simulation.
+</ParamField>
+
+## Response
+
+Returns JSON with the final simulation state:
+
+<ResponseField name="currentTick" type="number">
+  Final tick number reached
+</ResponseField>
+
+<ResponseField name="currentDate" type="string">
+  Final simulation date (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="company" type="object">
+  Final company state including funds, prestige, employees, and tasks
+</ResponseField>
+
+<ResponseField name="market" type="object">
+  Final market state with available tasks
+</ResponseField>
+
+<ResponseField name="events" type="array">
+  Log of all simulation events that occurred
+</ResponseField>
+
+## Example
+
+```bash
+# Run with custom initial conditions
+yc-bench run --initial-funds 100000 --initial-prestige 10 --max-days 90
+```
+
+```bash
+# Run and save output to file
+yc-bench run --output ./results.json --verbose
+```
+
+```json Example Output
+{
+  "currentTick": 2160,
+  "currentDate": "2024-04-01T00:00:00.000Z",
+  "company": {
+    "funds": 75000,
+    "prestige": 15,
+    "employees": [...],
+    "tasks": [...]
+  },
+  "market": {
+    "availableTasks": [...]
+  },
+  "events": [...]
+}
+```
+
+## Related Commands
+
+- [start](/cli/start) - Interactive wizard for beginners
+- [sim-resume](/cli/sim-resume) - Advance simulation to next event
+- [company-status](/cli/company-status) - Check current company state

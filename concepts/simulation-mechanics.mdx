@@ -1,0 +1,368 @@
+---
+title: 'Simulation Mechanics'
+description: 'Deep dive into the discrete-event simulation model, time advancement, and progress flushing'
+icon: 'gears'
+---
+
+## Discrete-Event Simulation Model
+
+YC-Bench uses a **discrete-event simulation** architecture. The simulation clock advances in variable-sized jumps to the next scheduled event, rather than fixed timesteps.
+
+### Event Types
+
+Four event types drive the simulation (defined in `src/yc_bench/db/models/event.py:11`):
+
+```python
+class EventType(str, Enum):
+    TASK_HALF_PROGRESS = "task_half_progress"  # Milestone at 25%, 50%, 75%
+    TASK_COMPLETED = "task_completed"          # Task finished (check deadline)
+    BANKRUPTCY = "bankruptcy"                  # Funds < 0
+    HORIZON_END = "horizon_end"                # Simulation time limit reached
+```
+
+### Event Queue
+
+Events are stored in the `sim_events` table with:
+- `scheduled_at`: when the event should fire
+- `company_id`: which company (always one company per run)
+- `event_type`: one of the four types above
+- `payload`: JSON metadata (e.g., `{"task_id": "uuid"}`)
+- `consumed`: boolean flag — events are consumed after processing
+- `dedupe_key`: prevents duplicate events during ETA recalculations
+
+## Time Advancement Algorithm
+
+The core loop is implemented in `src/yc_bench/core/engine.py:120` (`advance_time` function).
+
+### High-Level Flow
+
+```python
+while True:
+    # 1. Find next action: earliest of (next_event, next_payroll, target_time)
+    candidates = []
+    if next_payroll <= target_time:
+        candidates.append(("payroll", next_payroll))
+    if next_event exists:
+        candidates.append(("event", next_event.scheduled_at))
+    candidates.append(("target", target_time))
+    
+    # Sort by time, then priority: payroll > event > target
+    action_type, action_time = min(candidates)
+    
+    # 2. Flush progress from current_time → action_time
+    flush_progress(db, company_id, current_time, action_time)
+    apply_prestige_decay(db, company_id, days_elapsed)
+    
+    # 3. Execute action
+    if action_type == "payroll":
+        deduct_salaries()
+        if funds < 0:
+            insert_bankruptcy_event()
+        break  # Return control to agent after payroll
+    elif action_type == "event":
+        dispatch_event(event)
+        consume_event(event)
+        if terminal_condition:
+            break
+    elif action_type == "target":
+        break  # Target time reached, nothing due
+```
+
+<Note>
+  The simulation **stops at payroll** to give the agent a chance to act before the next month's expenses arrive. This is a critical checkpoint for cash flow decisions.
+</Note>
+
+## Progress Flushing
+
+Progress flushing calculates work done by employees during a time window `[t0, t1]`.
+
+### Formula (from `src/yc_bench/core/progress.py:108`)
+
+For each active task, each domain requirement:
+
+```python
+# 1. Calculate business hours elapsed
+hours = business_hours_between(t0, t1)  # Excludes nights/weekends
+
+# 2. Calculate effective rate for this task-domain pair
+effective_rate = sum(
+    employee.rate_domain_per_hour / count(employee.active_tasks)
+    for employee in task.assignments
+)
+
+# 3. Calculate progress delta
+delta_qty = effective_rate * hours
+after_qty = min(req.required_qty, before_qty + delta_qty)
+
+# 4. Update completed_qty in database
+req.completed_qty = after_qty
+```
+
+### Throughput Splitting
+
+The key mechanic: **employees split throughput across active tasks**.
+
+- Employee with 1 active task → contributes `base_rate` per hour
+- Employee with 2 active tasks → contributes `base_rate / 2` per hour to each
+- Employee with N active tasks → contributes `base_rate / N` per hour to each
+
+<Warning>
+  Splitting an employee across 3 tasks is **strictly worse** than working them sequentially. Total throughput drops as N increases.
+</Warning>
+
+### Example
+
+Employee Alice has:
+- Research rate: 5.0 units/hour
+- Assigned to 2 active tasks: Task A and Task B
+
+Task A needs 100 research units.
+Task B needs 200 research units.
+
+Alice contributes:
+- Task A: `5.0 / 2 = 2.5` units/hour
+- Task B: `5.0 / 2 = 2.5` units/hour
+
+After 10 business hours:
+- Task A: `+25` units
+- Task B: `+25` units
+
+If Alice worked Task A **alone** for 10 hours, it would gain `5.0 * 10 = 50` units (done in 20 hours). Instead, it takes 40 hours when split.
+
+## Payroll Mechanics
+
+Payroll occurs at the **start of each month** (1st day, 9:00 AM business time).
+
+### Payroll Calculation (from `src/yc_bench/core/engine.py:50`)
+
+```python
+def apply_payroll(db, company_id, time):
+    employees = db.query(Employee).filter(company_id).all()
+    total_payroll = 0
+    
+    for emp in employees:
+        salary = emp.salary_cents
+        total_payroll += salary
+        
+        # Ledger entry for each employee
+        db.add(LedgerEntry(
+            category=MONTHLY_PAYROLL,
+            amount_cents=-salary,  # negative = expense
+            ref_id=emp.id,
+        ))
+    
+    company.funds_cents -= total_payroll
+    return company.funds_cents < 0  # bankrupt?
+```
+
+### Bankruptcy Trigger
+
+If `company.funds_cents < 0` after payroll:
+1. Simulation inserts a `BANKRUPTCY` event at the current time
+2. Event fires immediately
+3. Simulation terminates
+4. Final results are written to the rollout JSON
+
+<Info>
+  Bankruptcy is the **most common** failure mode in hard presets. Agents must maintain sufficient runway (typically 3–6 months of payroll).
+</Info>
+
+## Prestige Decay
+
+Prestige decay is applied **continuously** during time advancement, proportional to `days_elapsed`.
+
+### Decay Formula (from `src/yc_bench/core/engine.py:107`)
+
+```python
+def apply_prestige_decay(db, company_id, days_elapsed):
+    decay_per_day = world_config.prestige_decay_per_day  # default: 0.005
+    total_decay = decay_per_day * days_elapsed
+    floor = world_config.prestige_min  # 1.0
+    
+    for domain in [research, inference, data_environment, training]:
+        prestige.level = max(floor, prestige.level - total_decay)
+```
+
+### Example
+
+- **Prestige decay rate**: `0.005` per day (default)
+- **Monthly decay**: `0.005 * 30 = 0.15`
+- **6-month decay**: `0.005 * 180 = 0.9`
+
+A domain at prestige `5.0` left untouched for 6 months → `5.0 - 0.9 = 4.1`.
+
+A domain at prestige `2.0` left untouched for 6 months → `2.0 - 0.9 = 1.1` (floors at 1.0).
+
+<Warning>
+  Domains not exercised for extended periods will **decay back to 1.0**, locking the agent out of high-prestige tasks in that domain.
+</Warning>
+
+## Event Processing Order
+
+### Tie-Breaking Rule (from `src/yc_bench/core/engine.py:160`)
+
+When multiple events are scheduled at the same timestamp:
+
+1. **Payroll** fires first (start-of-day obligation)
+2. **Events** fire second
+3. **Target time** reached last
+
+This ensures payroll is deducted before any task completions at the same timestamp, preventing agents from "sneaking in" a reward before payroll.
+
+### Event Handler Dispatch (from `src/yc_bench/core/engine.py:74`)
+
+```python
+def dispatch_event(db, event, sim_time, company_id):
+    if event.event_type == TASK_HALF_PROGRESS:
+        handle_task_half(db, event)
+        recalculate_etas(db, company_id, sim_time)  # Update future milestones
+        return {"type": "task_half", "milestone_pct": 50}
+    
+    elif event.event_type == TASK_COMPLETED:
+        result = handle_task_complete(db, event, sim_time)
+        recalculate_etas(db, company_id, sim_time)  # Freed employees change topology
+        return {"type": "task_completed", "success": result.success, ...}
+    
+    elif event.event_type == HORIZON_END:
+        return {"type": "horizon_end", "reached": True}
+    
+    elif event.event_type == BANKRUPTCY:
+        return {"type": "bankruptcy", "bankrupt": True}
+```
+
+## ETA Recalculation
+
+Projection events (`TASK_HALF_PROGRESS`, `TASK_COMPLETED`) are recalculated whenever the task topology changes:
+
+- Employee assigned to/unassigned from a task
+- Task dispatched to active status
+- Task completed or cancelled
+
+### Recalculation Trigger Points
+
+| Agent Action | Recalculates ETAs for... |
+|--------------|-------------------------|
+| `task assign` | All active tasks sharing the assigned employee |
+| `task dispatch` | The dispatched task + all active tasks sharing its assigned employees |
+| `task cancel` | All active tasks sharing the cancelled task's employees |
+| Task completion event | All active tasks (freed employees change global topology) |
+
+### ETA Solver (from `src/yc_bench/core/eta.py:23`)
+
+For each active task:
+
+```python
+def solve_task_completion_time(task_id, now, rates):
+    # Find max hours across all domain requirements
+    max_hours = 0
+    for req in task.requirements:
+        remaining = req.required_qty - req.completed_qty
+        rate = effective_rate_for_domain(task_id, req.domain, rates)
+        if rate <= 0 and remaining > 0:
+            return None  # Cannot complete (no employees assigned)
+        hours = remaining / rate
+        max_hours = max(max_hours, hours)
+    
+    # Domains are worked in parallel → completion time is the bottleneck domain
+    return add_business_hours(now, max_hours)
+```
+
+<Info>
+  **Domains are worked in parallel**: A task with 100 research units and 200 training units will complete when the **slower** domain (training) finishes.
+</Info>
+
+## Business Hours Calculation
+
+Progress flushing uses **business hours** only. Nights and weekends are excluded.
+
+### Business Hours Window (from `src/yc_bench/core/business_time.py`)
+
+- **Workday**: 9:00 AM – 6:00 PM (9 hours)
+- **Weekends**: Excluded (no work Saturday/Sunday)
+- **Holidays**: Not modeled (every weekday counts)
+
+### Example
+
+Time window: Friday 3:00 PM → Monday 11:00 AM
+
+- Friday 3:00 PM – 6:00 PM: **3 hours**
+- Saturday: **0 hours** (weekend)
+- Sunday: **0 hours** (weekend)
+- Monday 9:00 AM – 11:00 AM: **2 hours**
+- **Total: 5 business hours**
+
+## Progress Checkpoints
+
+The agent is woken at **progress milestones** to observe task advancement. This provides data points to infer employee productivity.
+
+### Default Milestones (from `default.toml:97`)
+
+```toml
+task_progress_milestones = [0.25, 0.5, 0.75]
+```
+
+- **25%**: Early checkpoint — detect if employees are underperforming
+- **50%**: Halfway — reassess deadline risk
+- **75%**: Final checkpoint before completion
+- **100%**: Task completed (success or fail based on deadline)
+
+### Milestone Event Emission (from `src/yc_bench/core/eta.py:249`)
+
+```python
+for milestone in [0.25, 0.5, 0.75]:
+    milestone_pct = int(milestone * 100)  # 25, 50, 75
+    if milestone_pct <= task.progress_milestone_pct:
+        continue  # Already emitted
+    
+    milestone_time = solve_task_halfway_time(task_id, now, rates, milestone)
+    if milestone_time:
+        insert_event(
+            event_type=TASK_HALF_PROGRESS,
+            scheduled_at=milestone_time,
+            payload={"task_id": task_id, "milestone_pct": milestone_pct},
+        )
+        break  # Only insert the next upcoming milestone
+```
+
+<Note>
+  Only the **next** upcoming milestone is scheduled. After it fires, the handler recalculates ETAs and schedules the following milestone.
+</Note>
+
+## Determinism and Reproducibility
+
+Given:
+- Fixed `run_seed`
+- Fixed world configuration (employee pool, task market, deadlines)
+- Fixed agent command sequence
+
+→ The simulation produces **bit-identical results**.
+
+### Sources of Non-Determinism (None)
+
+- ❌ No floating-point randomness (all distributions evaluated at world generation)
+- ❌ No wall-clock time dependencies
+- ❌ No async/parallel execution
+- ❌ No external API calls during simulation
+
+✅ All arithmetic uses Python `Decimal` for exact precision.
+
+✅ All event timestamps are calculated from business-time arithmetic.
+
+✅ Employee skill rates are fixed at world generation (seeded RNG).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prestige System" icon="medal" href="/concepts/prestige-system">
+    Understand prestige levels, decay rates, and per-domain gating.
+  </Card>
+  <Card title="Task Management" icon="list-check" href="/concepts/task-management">
+    Learn the task lifecycle: accept → assign → dispatch → complete.
+  </Card>
+  <Card title="Employee System" icon="users" href="/concepts/employee-system">
+    Explore employee tiers, hidden skill rates, and throughput splitting.
+  </Card>
+  <Card title="Scoring" icon="chart-line" href="/concepts/scoring">
+    Understand what makes a good run and how to interpret results.
+  </Card>
+</CardGroup>

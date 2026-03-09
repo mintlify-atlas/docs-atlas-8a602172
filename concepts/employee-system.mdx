@@ -1,0 +1,475 @@
+---
+title: 'Employee System'
+description: 'Understand employee tiers, hidden skill rates, throughput splitting, and salary dynamics'
+icon: 'users'
+---
+
+## Overview
+
+You start with **10 employees** across three tiers: junior, mid-level, and senior. Each employee has:
+- **Visible**: tier, salary, active task assignments
+- **Hidden**: per-domain skill rates (must be inferred from task progress observations)
+
+The employee system is designed to test agent ability to:
+1. **Infer hidden information** (skill rates) from observations (progress checkpoints)
+2. **Optimize throughput allocation** (avoid over-splitting employees)
+3. **Manage cash flow** (salaries compound over time)
+
+## Employee Tiers (Junior / Mid / Senior)
+
+Employees are distributed across three tiers (from `default.toml:169`):
+
+```toml
+[world.salary_junior]
+name = "junior"
+share = 0.50        # 50% of headcount
+min_cents = 200_000  # $2,000/month
+max_cents = 400_000  # $4,000/month
+rate_min = 1.0       # 1.0 units/hour
+rate_max = 4.0       # 4.0 units/hour
+
+[world.salary_mid]
+name = "mid"
+share = 0.35        # 35% of headcount
+min_cents = 600_000  # $6,000/month
+max_cents = 800_000  # $8,000/month
+rate_min = 4.0
+rate_max = 7.0
+
+[world.salary_senior]
+name = "senior"
+share = 0.15        # 15% of headcount
+min_cents = 1_000_000  # $10,000/month
+max_cents = 1_500_000  # $15,000/month
+rate_min = 7.0
+rate_max = 10.0
+```
+
+### Default Headcount (10 employees)
+
+- **5 juniors** (50% share)
+- **3.5 mid-level** → rounds to **3 or 4** depending on RNG
+- **1.5 seniors** → rounds to **1 or 2** depending on RNG
+
+### Tier Characteristics
+
+| Tier | Salary Range | Skill Rate Range | Cost-Effectiveness |
+|------|--------------|------------------|--------------------|
+| **Junior** | $2K–$4K/mo | 1.0–4.0 u/h | High variance (some juniors outperform mids!) |
+| **Mid** | $6K–$8K/mo | 4.0–7.0 u/h | Reliable mid-tier throughput |
+| **Senior** | $10K–$15K/mo | 7.0–10.0 u/h | Expensive but high throughput |
+
+<Note>
+  Skill rate ranges **overlap** across tiers. A lucky junior with 4.0 u/h is as productive as a mid-level employee but costs **half the salary**.
+</Note>
+
+## Hidden Skill Rates (Per Domain)
+
+Each employee has **four skill rates** — one per domain (research, inference, data/environment, training).
+
+### Skill Rate Storage (from `src/yc_bench/db/models/employee.py:48`)
+
+```python
+class EmployeeSkillRate(Base):
+    employee_id = mapped_column(Uuid, primary_key=True)
+    domain = mapped_column(Enum(Domain), primary_key=True)
+    rate_domain_per_hour = mapped_column(Numeric(12, 4))  # units/hour
+```
+
+### Example Employee
+
+**Alice** (junior, $3,200/month):
+- Research: `3.2` units/hour
+- Inference: `1.8` units/hour
+- Data/Environment: `2.5` units/hour
+- Training: `3.9` units/hour
+
+**Bob** (senior, $12,500/month):
+- Research: `8.1` units/hour
+- Inference: `7.3` units/hour
+- Data/Environment: `9.2` units/hour
+- Training: `7.8` units/hour
+
+<Warning>
+  Skill rates are **completely hidden** from the agent. The agent sees only tier and salary. Agents must **infer** rates by observing task progress over time.
+</Warning>
+
+### Rate Generation (Deterministic)
+
+At world initialization, skill rates are sampled from uniform distributions seeded by `run_seed + employee_index + domain_index`. Given the same seed, you get the same employees.
+
+## Inferring Productivity from Observations
+
+Agents can infer employee skill rates by measuring task progress between checkpoints.
+
+### Progress Observation
+
+At 25%, 50%, 75%, and 100% milestones, the agent can inspect:
+
+```bash
+yc-bench task inspect --task-id <UUID>
+```
+
+**Output**:
+
+```json
+{
+  "requirements": [
+    {
+      "domain": "research",
+      "required_qty": 3200,
+      "completed_qty": 1680,
+      "remaining_qty": 1520
+    }
+  ],
+  "assignments": [
+    {"employee_id": "alice", "assigned_at": "2025-03-15T10:00:00Z"},
+    {"employee_id": "bob", "assigned_at": "2025-03-15T10:00:00Z"}
+  ]
+}
+```
+
+### Rate Inference Formula
+
+If Alice and Bob are assigned to **only this task**:
+
+```
+total_progress = 1680 units
+business_hours_elapsed = 48 hours (from accept to now)
+num_employees = 2
+
+combined_rate = total_progress / business_hours_elapsed
+              = 1680 / 48
+              = 35 units/hour
+
+avg_rate_per_employee = 35 / 2 = 17.5 units/hour
+```
+
+If Alice and Bob are assigned to **multiple tasks**, you must account for throughput splitting (see next section).
+
+<Info>
+  By observing progress across multiple tasks and checkpoints, agents can build a probabilistic model of each employee's skill rates per domain.
+</Info>
+
+## Throughput Splitting (N Active Tasks = Base Rate / N)
+
+This is the **key mechanic** that makes employee allocation strategic.
+
+### Formula (from `src/yc_bench/core/progress.py:68`)
+
+```python
+effective_rate = base_rate / num_active_tasks
+```
+
+An employee assigned to **N active tasks** contributes `base_rate / N` to each task.
+
+### Example: Single Task
+
+Alice (research rate: 8.0 u/h) assigned to 1 active task:
+
+```
+effective_rate = 8.0 / 1 = 8.0 u/h
+```
+
+After 10 business hours:
+
+```
+progress = 8.0 × 10 = 80 units
+```
+
+### Example: Multiple Tasks
+
+Alice assigned to **3 active tasks** (Task A, Task B, Task C):
+
+```
+effective_rate_per_task = 8.0 / 3 = 2.67 u/h
+```
+
+After 10 business hours:
+
+```
+Task A progress: 2.67 × 10 = 26.7 units
+Task B progress: 2.67 × 10 = 26.7 units
+Task C progress: 2.67 × 10 = 26.7 units
+Total progress: 80 units (same as single-task case)
+```
+
+### Why Splitting is Bad
+
+If Task A needs 100 units:
+
+- **Single-task**: Completes in `100 / 8.0 = 12.5 hours`
+- **Three-task split**: Completes in `100 / 2.67 = 37.5 hours` (3× slower)
+
+Deadlines don't scale with N. If Task A has a 15-hour deadline:
+
+- **Single-task**: ✅ Finishes in 12.5 hours (on time)
+- **Three-task split**: ❌ Finishes in 37.5 hours (late, prestige penalty)
+
+<Warning>
+  **Focus beats breadth.** Assigning an employee to 3 tasks simultaneously is strictly worse than working them sequentially.
+</Warning>
+
+### Strategic Implication
+
+Agents must:
+1. **Sequence tasks** rather than parallelizing across employees
+2. **Batch similar tasks** to avoid context-switching penalties
+3. **Avoid over-committing** employees to too many simultaneous tasks
+
+## Salary Structure
+
+Salaries are deducted **monthly** at the start of each month (1st day, 9:00 AM).
+
+### Starting Salaries
+
+Each employee's salary is sampled from their tier's salary range at world initialization:
+
+```python
+junior_salary = uniform(2_000, 4_000)  # dollars/month
+mid_salary = uniform(6_000, 8_000)
+senior_salary = uniform(10_000, 15_000)
+```
+
+### Example Payroll (10 employees)
+
+| Tier | Count | Avg Salary | Total |
+|------|-------|------------|-------|
+| Junior | 5 | $3,000 | $15,000 |
+| Mid | 3 | $7,000 | $21,000 |
+| Senior | 2 | $12,500 | $25,000 |
+| **Total** | **10** | **$6,100** | **$61,000/month** |
+
+### Initial Runway
+
+With starting funds of **$150,000** (default) and payroll of **$61,000/month**:
+
+```
+runway = $150,000 / $61,000 ≈ 2.5 months
+```
+
+<Warning>
+  You start with **~2.5 months of runway**. You must complete profitable tasks quickly to avoid bankruptcy.
+</Warning>
+
+## Salary Bumps on Task Completion (1% Compounding)
+
+Every successful task completion gives all assigned employees a **1% salary raise** (from `default.toml:65`).
+
+### Salary Bump Formula (from `src/yc_bench/core/handlers/task_complete.py:103`)
+
+```python
+if task.success:
+    for assignment in task.assignments:
+        employee = get_employee(assignment.employee_id)
+        bump = int(employee.salary_cents * salary_bump_pct)  # 1%
+        employee.salary_cents += bump
+```
+
+### Example: Compounding Effect
+
+Alice starts at **$3,000/month**.
+
+After 10 successful tasks:
+
+```
+new_salary = $3,000 × (1.01)^10 = $3,314/month (+10.5%)
+```
+
+After 50 successful tasks:
+
+```
+new_salary = $3,000 × (1.01)^50 = $4,918/month (+64%)
+```
+
+After 100 successful tasks:
+
+```
+new_salary = $3,000 × (1.01)^100 = $8,145/month (+171%)
+```
+
+### Total Payroll Growth
+
+If all 10 employees participate in all tasks equally:
+
+| Tasks Completed | Starting Payroll | New Payroll | Increase |
+|-----------------|------------------|-------------|----------|
+| 0 | $61,000 | $61,000 | — |
+| 20 | $61,000 | $74,400 | +22% |
+| 50 | $61,000 | $100,000 | +64% |
+| 100 | $61,000 | $165,000 | +171% |
+
+<Warning>
+  Payroll **compounds exponentially**. After 100 tasks, your monthly payroll could be **2.7× higher** than starting payroll. This is the primary failure mode in long runs.
+</Warning>
+
+## Salary Bumps and Cash Flow Strategy
+
+### Early Game (Months 1–6)
+
+- Payroll is manageable (~$60K–$80K/month)
+- Focus on completing **any** profitable tasks to build cash reserves
+- Prestige climb is more important than payroll optimization
+
+### Mid Game (Months 7–18)
+
+- Payroll has grown to ~$100K–$150K/month
+- Must complete **high-prestige tasks** (4–6×) to offset payroll
+- Selective about which tasks to accept (avoid low-margin tasks)
+
+### Late Game (Months 19–36)
+
+- Payroll may exceed **$200K/month**
+- Requires **prestige-7+ tasks** to stay cash-flow positive
+- One failed task can trigger bankruptcy
+
+<Info>
+  The salary bump mechanic creates **compounding payroll pressure**, forcing agents to continuously climb prestige to access higher-paying tasks.
+</Info>
+
+## Employee Observability
+
+Agents can query employee status:
+
+```bash
+yc-bench employee list
+```
+
+**Output**:
+
+```json
+{
+  "count": 10,
+  "employees": [
+    {
+      "employee_id": "emp1-...",
+      "name": "Alice",
+      "tier": "junior",
+      "salary_cents": 320000,  // $3,200/month
+      "work_hours_per_day": 9.0,
+      "active_task_count": 2
+    },
+    {
+      "employee_id": "emp2-...",
+      "name": "Bob",
+      "tier": "senior",
+      "salary_cents": 1250000,  // $12,500/month
+      "work_hours_per_day": 9.0,
+      "active_task_count": 1
+    },
+    ...
+  ]
+}
+```
+
+<Note>
+  The `active_task_count` field shows how many active tasks the employee is assigned to. Use this to avoid over-splitting employees.
+</Note>
+
+## Best Practices
+
+### 1. Infer Skill Rates Early
+
+In the first 10–20 tasks, intentionally assign employees to **single tasks** to measure their base rates without throughput splitting:
+
+```python
+# Task A: Assign only Alice
+# Task B: Assign only Bob
+# Measure progress → infer base rates
+```
+
+### 2. Avoid Throughput Splitting
+
+Prefer assigning employees to **one active task at a time**:
+
+```python
+# Good: Alice on Task A (100%), Bob on Task B (100%)
+assign(alice, task_a)
+assign(bob, task_b)
+
+# Bad: Alice on Task A + Task B (50% each)
+assign(alice, task_a)
+assign(alice, task_b)
+```
+
+### 3. Match Employees to Domains
+
+Once you've inferred skill rates, assign employees to tasks in their **strong domains**:
+
+```python
+if task.requirements == ["research", "training"]:
+    assign(alice)  # Strong in research (8.0 u/h)
+    assign(bob)    # Strong in training (7.8 u/h)
+```
+
+### 4. Monitor Payroll Growth
+
+Track payroll growth rate:
+
+```python
+payroll_growth_per_task = 1% × num_employees_assigned
+total_payroll_growth = (1.01)^tasks_completed
+```
+
+If payroll is growing faster than revenue, you're on a path to bankruptcy.
+
+### 5. Rotate Employees to Manage Salary Growth
+
+To slow payroll growth, rotate which employees are assigned to tasks:
+
+```python
+# Don't always use the same 5 employees
+# Rotate assignments to distribute salary bumps evenly
+```
+
+<Info>
+  Salary bumps apply **only to assigned employees**. If you always use the same 5 employees, their salaries will grow much faster than the other 5.
+</Info>
+
+## Edge Cases and Gotchas
+
+### Hidden Specialist
+
+A junior employee might be a **hidden specialist** in one domain:
+
+- Research: `3.8` u/h (excellent for junior)
+- Inference: `1.2` u/h (poor)
+- Data/Environment: `1.5` u/h (poor)
+- Training: `1.8` u/h (poor)
+
+If you assign them to a multi-domain task (e.g., `[inference, training]`), they'll underperform despite being strong in research.
+
+<Note>
+  Always match employees to tasks based on **task-specific domain requirements**, not tier or salary.
+</Note>
+
+### Over-Assignment
+
+Assigning **too many employees** to a task doesn't always help:
+
+- Task needs 1000 research units
+- Deadline: 10 business days (90 hours)
+- Required rate: `1000 / 90 = 11.1 u/h`
+
+**Option A**: Assign Alice (8.0 u/h) alone → completes in `1000 / 8.0 = 125 hours` ❌ (misses deadline)
+
+**Option B**: Assign Alice + Bob (8.0 + 7.0 = 15.0 u/h) → completes in `1000 / 15.0 = 66.7 hours` ✅ (on time)
+
+But if Bob is already assigned to another task, his contribution drops to `7.0 / 2 = 3.5 u/h`, and the combined rate is only `8.0 + 3.5 = 11.5 u/h` (barely on time).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Task Management" icon="list-check" href="/concepts/task-management">
+    Learn how to assign employees to tasks and manage the task lifecycle.
+  </Card>
+  <Card title="Simulation Mechanics" icon="gears" href="/concepts/simulation-mechanics">
+    Deep dive into how progress flushing and throughput splitting work.
+  </Card>
+  <Card title="Scoring" icon="chart-line" href="/concepts/scoring">
+    Understand how employee utilization factors into final scores.
+  </Card>
+  <Card title="Prestige System" icon="medal" href="/concepts/prestige-system">
+    Learn how skill boosts from task completion improve employee rates.
+  </Card>
+</CardGroup>

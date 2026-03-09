@@ -1,0 +1,134 @@
+---
+title: "scratchpad"
+description: "Persistent notepad for strategy notes and observations"
+---
+
+# `yc-bench scratchpad`
+
+A persistent notepad for storing strategy notes, observations, and reminders during your YC-Bench simulation.
+
+## Usage
+
+```bash
+yc-bench scratchpad [ACTION] [CONTENT]
+```
+
+## Parameters
+
+<ParamField path="ACTION" type="string" optional>
+  Action to perform: read, write, append, or clear (defaults to read)
+</ParamField>
+
+<ParamField path="CONTENT" type="string" optional>
+  Content to write or append (required for write/append actions)
+</ParamField>
+
+## Actions
+
+### Read
+
+Display current scratchpad contents.
+
+```bash
+yc-bench scratchpad
+yc-bench scratchpad read
+```
+
+### Write
+
+Replace scratchpad contents with new text.
+
+```bash
+yc-bench scratchpad write "New strategy: Focus on high-prestige tasks"
+```
+
+### Append
+
+Add text to the end of existing scratchpad contents.
+
+```bash
+yc-bench scratchpad append "Hired senior dev - watch burn rate"
+```
+
+### Clear
+
+Erase all scratchpad contents.
+
+```bash
+yc-bench scratchpad clear
+```
+
+## Response
+
+<ResponseField name="action" type="string">
+  Action performed: read, write, append, or clear
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  Current scratchpad contents after action
+</ResponseField>
+
+<ResponseField name="length" type="number">
+  Character count of scratchpad contents
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation message
+</ResponseField>
+
+## Example
+
+```bash
+# Write initial notes
+yc-bench scratchpad write "Month 1 Strategy:
+- Accept only mid-tier tasks
+- Maintain 3 months runway
+- Target 10 prestige by end of month"
+```
+
+```json Example Output
+{
+  "action": "write",
+  "content": "Month 1 Strategy:\n- Accept only mid-tier tasks\n- Maintain 3 months runway\n- Target 10 prestige by end of month",
+  "length": 98,
+  "message": "Scratchpad updated"
+}
+```
+
+```bash
+# Add observation
+yc-bench scratchpad append "\n\nNote: Market refresh happens every 7 days"
+```
+
+```bash
+# Read current notes
+yc-bench scratchpad
+```
+
+```json Example Output
+{
+  "action": "read",
+  "content": "Month 1 Strategy:\n- Accept only mid-tier tasks\n- Maintain 3 months runway\n- Target 10 prestige by end of month\n\nNote: Market refresh happens every 7 days",
+  "length": 143,
+  "message": "Scratchpad retrieved"
+}
+```
+
+## Use Cases
+
+- Track strategic goals and priorities
+- Record observations about market patterns
+- Note employee performance and productivity
+- Plan future hiring and task acceptance
+- Document lessons learned from failed strategies
+- Keep track of important deadlines
+
+## Persistence
+
+Scratchpad contents are saved with your simulation state and persist across sessions.
+
+## Related Commands
+
+- [company-status](/cli/company-status) - Current company state
+- [task-list](/cli/task-list) - Track active tasks
+- [report-monthly](/cli/report-monthly) - Review monthly performance

@@ -1,0 +1,169 @@
+---
+title: "report-monthly"
+description: "Generate monthly profit & loss and key performance metrics"
+---
+
+# `yc-bench report-monthly`
+
+Generate a comprehensive monthly report showing revenue, expenses, profit/loss, tasks completed, and other key performance indicators.
+
+## Usage
+
+```bash
+yc-bench report-monthly [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="--month" type="string" optional>
+  Month to report on in YYYY-MM format (defaults to current month)
+</ParamField>
+
+<ParamField path="--compare" type="boolean" optional>
+  Include comparison with previous month
+</ParamField>
+
+## Response
+
+Returns monthly financial and operational metrics:
+
+<ResponseField name="month" type="string">
+  Report month (YYYY-MM format)
+</ResponseField>
+
+<ResponseField name="revenue" type="number">
+  Total revenue for the month
+</ResponseField>
+
+<ResponseField name="taskPayments" type="number">
+  Revenue from completed tasks
+</ResponseField>
+
+<ResponseField name="expenses" type="number">
+  Total expenses for the month
+</ResponseField>
+
+<ResponseField name="payrollExpense" type="number">
+  Employee salary expenses
+</ResponseField>
+
+<ResponseField name="otherExpenses" type="number">
+  Non-payroll expenses
+</ResponseField>
+
+<ResponseField name="netIncome" type="number">
+  Profit or loss (revenue - expenses)
+</ResponseField>
+
+<ResponseField name="profitMargin" type="number">
+  Profit margin percentage
+</ResponseField>
+
+<ResponseField name="tasksCompleted" type="number">
+  Number of tasks completed this month
+</ResponseField>
+
+<ResponseField name="tasksCancelled" type="number">
+  Number of tasks cancelled this month
+</ResponseField>
+
+<ResponseField name="prestigeGained" type="number">
+  Net prestige change for the month
+</ResponseField>
+
+<ResponseField name="employeeCount" type="object">
+  Employee count at start and end of month
+</ResponseField>
+
+<ResponseField name="cashFlow" type="object">
+  Beginning balance, ending balance, and net change
+</ResponseField>
+
+<ResponseField name="comparison" type="object | null">
+  Comparison with previous month (if --compare flag used)
+</ResponseField>
+
+## Example
+
+```bash
+# Generate report for current month
+yc-bench report-monthly
+```
+
+```bash
+# Generate report for specific month
+yc-bench report-monthly --month 2024-01
+```
+
+```bash
+# Generate report with month-over-month comparison
+yc-bench report-monthly --compare
+```
+
+```json Example Output
+{
+  "month": "2024-01",
+  "revenue": 23000,
+  "taskPayments": 23000,
+  "expenses": 19000,
+  "payrollExpense": 18000,
+  "otherExpenses": 1000,
+  "netIncome": 4000,
+  "profitMargin": 17.4,
+  "tasksCompleted": 4,
+  "tasksCancelled": 1,
+  "prestigeGained": 6,
+  "employeeCount": {
+    "startOfMonth": 2,
+    "endOfMonth": 3,
+    "netChange": 1
+  },
+  "cashFlow": {
+    "beginningBalance": 50000,
+    "endingBalance": 54000,
+    "netChange": 4000
+  },
+  "comparison": null
+}
+```
+
+```json Example with Comparison
+{
+  "month": "2024-02",
+  "revenue": 31000,
+  "expenses": 22000,
+  "netIncome": 9000,
+  "profitMargin": 29.0,
+  "tasksCompleted": 5,
+  "comparison": {
+    "revenueChange": 8000,
+    "revenueChangePercent": 34.8,
+    "expenseChange": 3000,
+    "expenseChangePercent": 15.8,
+    "netIncomeChange": 5000,
+    "netIncomeChangePercent": 125.0
+  }
+}
+```
+
+## Key Metrics
+
+- **Profit Margin** - (Net Income / Revenue) × 100
+- **Burn Rate** - Monthly expenses (important for runway)
+- **Revenue per Task** - Average payment per completed task
+- **Employee Utilization** - Tasks completed vs. employee capacity
+
+## Use Cases
+
+- Track monthly profitability trends
+- Evaluate hiring decisions impact
+- Monitor burn rate and runway
+- Compare performance across months
+- Identify seasonal patterns
+
+## Related Commands
+
+- [finance-ledger](/cli/finance-ledger) - Detailed transaction history
+- [company-status](/cli/company-status) - Current company state
+- [task-list](/cli/task-list) - View completed tasks
+- [employee-list](/cli/employee-list) - View payroll costs

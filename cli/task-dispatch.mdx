@@ -1,0 +1,103 @@
+---
+title: "task-dispatch"
+description: "Start work on a planned task with assigned employee"
+---
+
+# `yc-bench task-dispatch`
+
+Begin active work on a planned task that has an employee assigned. Changes task status from "planned" to "in_progress" and schedules completion event.
+
+## Usage
+
+```bash
+yc-bench task-dispatch <task-id>
+```
+
+## Parameters
+
+<ParamField path="task-id" type="string" required>
+  The ID of the task to dispatch (must be planned with employee assigned)
+</ParamField>
+
+## Response
+
+Returns the dispatched task with timing details:
+
+<ResponseField name="taskId" type="string">
+  Task identifier
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Updated task status ("in_progress")
+</ResponseField>
+
+<ResponseField name="assignedEmployee" type="object">
+  Details of the employee working on the task
+</ResponseField>
+
+<ResponseField name="startedAt" type="string">
+  Timestamp when work began (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="expectedCompletion" type="string">
+  Expected completion date (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="hoursRemaining" type="number">
+  Total hours of work remaining
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation message
+</ResponseField>
+
+## Example
+
+```bash
+# Start work on a task
+yc-bench task-dispatch task_123
+```
+
+```json Example Output
+{
+  "taskId": "task_123",
+  "status": "in_progress",
+  "assignedEmployee": {
+    "id": "emp_002",
+    "name": "Bob Smith",
+    "tier": "mid",
+    "productivity": 0.95
+  },
+  "startedAt": "2024-01-15T00:00:00.000Z",
+  "expectedCompletion": "2024-02-10T00:00:00.000Z",
+  "hoursRemaining": 120,
+  "message": "Work started! Bob Smith is now working on this task."
+}
+```
+
+## Workflow
+
+1. Accept task from market → `task-accept`
+2. Assign employee to task → `task-assign`
+3. **Dispatch task to start work** → `task-dispatch` (this command)
+4. Wait for completion → `sim-resume`
+
+## Validation Rules
+
+- Task must be in "planned" status
+- Task must have an employee assigned
+- Employee must still be available (not reassigned)
+
+## Error Cases
+
+- **Task not found** - Invalid task ID
+- **No employee assigned** - Must assign employee first
+- **Invalid status** - Task already in progress or completed
+- **Employee unavailable** - Assigned employee no longer available
+
+## Related Commands
+
+- [task-assign](/cli/task-assign) - Assign employee to task
+- [task-inspect](/cli/task-inspect) - Check task progress
+- [sim-resume](/cli/sim-resume) - Advance to completion
+- [task-list](/cli/task-list) - List all tasks

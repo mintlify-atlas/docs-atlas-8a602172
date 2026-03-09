@@ -1,0 +1,163 @@
+---
+title: "finance-ledger"
+description: "View complete transaction history with dates and balances"
+---
+
+# `yc-bench finance-ledger`
+
+Display a detailed ledger of all financial transactions including payments received, salaries paid, and other expenses.
+
+## Usage
+
+```bash
+yc-bench finance-ledger [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="--type" type="string" optional>
+  Filter by transaction type: income, expense, payroll, task_payment
+</ParamField>
+
+<ParamField path="--start-date" type="string" optional>
+  Filter transactions after this date (ISO 8601 format)
+</ParamField>
+
+<ParamField path="--end-date" type="string" optional>
+  Filter transactions before this date (ISO 8601 format)
+</ParamField>
+
+<ParamField path="--limit" type="number" optional>
+  Maximum number of transactions to return (default: 50)
+</ParamField>
+
+## Response
+
+Returns transaction history:
+
+<ResponseField name="transactions" type="array">
+  List of financial transactions
+</ResponseField>
+
+<ResponseField name="transactions[].id" type="string">
+  Unique transaction identifier
+</ResponseField>
+
+<ResponseField name="transactions[].date" type="string">
+  Transaction date (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="transactions[].type" type="string">
+  Transaction type: income, expense, payroll, task_payment, etc.
+</ResponseField>
+
+<ResponseField name="transactions[].description" type="string">
+  Human-readable description
+</ResponseField>
+
+<ResponseField name="transactions[].amount" type="number">
+  Transaction amount (positive for income, negative for expenses)
+</ResponseField>
+
+<ResponseField name="transactions[].balance" type="number">
+  Account balance after transaction
+</ResponseField>
+
+<ResponseField name="transactions[].relatedEntity" type="string | null">
+  Related task ID, employee ID, or null
+</ResponseField>
+
+<ResponseField name="totalIncome" type="number">
+  Sum of all income in period
+</ResponseField>
+
+<ResponseField name="totalExpenses" type="number">
+  Sum of all expenses in period
+</ResponseField>
+
+<ResponseField name="netCashFlow" type="number">
+  Net change (income - expenses)
+</ResponseField>
+
+<ResponseField name="currentBalance" type="number">
+  Current account balance
+</ResponseField>
+
+## Example
+
+```bash
+# View all transactions
+yc-bench finance-ledger
+```
+
+```bash
+# View only income transactions
+yc-bench finance-ledger --type income
+```
+
+```bash
+# View transactions for specific date range
+yc-bench finance-ledger --start-date 2024-01-01 --end-date 2024-01-31
+```
+
+```json Example Output
+{
+  "transactions": [
+    {
+      "id": "txn_001",
+      "date": "2024-01-01T00:00:00.000Z",
+      "type": "income",
+      "description": "Initial funding",
+      "amount": 50000,
+      "balance": 50000,
+      "relatedEntity": null
+    },
+    {
+      "id": "txn_002",
+      "date": "2024-01-15T00:00:00.000Z",
+      "type": "task_payment",
+      "description": "Payment for: Fix authentication bugs",
+      "amount": 3000,
+      "balance": 53000,
+      "relatedEntity": "task_123"
+    },
+    {
+      "id": "txn_003",
+      "date": "2024-02-01T00:00:00.000Z",
+      "type": "payroll",
+      "description": "Monthly payroll - 3 employees",
+      "amount": -18000,
+      "balance": 35000,
+      "relatedEntity": null
+    },
+    {
+      "id": "txn_004",
+      "date": "2024-02-10T00:00:00.000Z",
+      "type": "task_payment",
+      "description": "Payment for: Build React dashboard",
+      "amount": 8000,
+      "balance": 43000,
+      "relatedEntity": "task_124"
+    }
+  ],
+  "totalIncome": 61000,
+  "totalExpenses": -18000,
+  "netCashFlow": 43000,
+  "currentBalance": 43000
+}
+```
+
+## Transaction Types
+
+- **income** - General income (initial funding, grants, etc.)
+- **task_payment** - Payment received for completed task
+- **payroll** - Monthly employee salary payments
+- **expense** - Other business expenses
+- **hiring_cost** - Employee hiring/recruitment costs
+
+## Related Commands
+
+- [company-status](/cli/company-status) - Current financial overview
+- [report-monthly](/cli/report-monthly) - Monthly P&L report
+- [task-list](/cli/task-list) - View tasks and payments
+- [employee-list](/cli/employee-list) - View payroll costs

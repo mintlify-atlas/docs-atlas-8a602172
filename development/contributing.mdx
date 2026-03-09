@@ -1,0 +1,483 @@
+---
+title: Contributing
+description: How to contribute to YC-Bench development
+---
+
+## Development Environment Setup
+
+### Prerequisites
+
+- **Python 3.12+** (required)
+- **[uv](https://github.com/astral-sh/uv)** (recommended package manager)
+- **Git** for version control
+
+### Installation
+
+1. **Clone the repository:**
+
+```bash
+git clone https://github.com/collinear-ai/yc-bench.git
+cd yc-bench
+```
+
+2. **Install dependencies:**
+
+```bash
+uv sync
+```
+
+This creates a virtual environment and installs all dependencies from `pyproject.toml`.
+
+3. **Set up API keys:**
+
+Create a `.env` file in the project root:
+
+```bash
+# .env
+ANTHROPIC_API_KEY="sk-ant-..."
+GEMINI_API_KEY="AIza..."
+OPENROUTER_API_KEY="sk-or-v1-..."
+OPENAI_API_KEY="sk-..."
+```
+
+YC-Bench uses [LiteLLM](https://docs.litellm.ai/) for multi-provider support. Only add keys for providers you plan to use.
+
+4. **Verify installation:**
+
+```bash
+uv run yc-bench --help
+```
+
+You should see the CLI help output.
+
+### Optional: PostgreSQL Support
+
+By default, YC-Bench uses SQLite. For PostgreSQL:
+
+```bash
+uv add yc-bench[postgres]
+export DATABASE_URL="postgresql://user:pass@localhost/ycbench"
+```
+
+## Running Tests
+
+YC-Bench currently does not have a formal test suite. Contributions to add testing infrastructure are welcome!
+
+**Recommended testing approach during development:**
+
+1. **Run a fast tutorial benchmark:**
+
+```bash
+uv run yc-bench run \
+  --model gemini/gemini-2.0-flash-exp \
+  --seed 1 \
+  --config tutorial
+```
+
+The `tutorial` preset has relaxed deadlines and minimal prestige complexity, completing in ~10-20 turns.
+
+2. **Inspect the output:**
+
+- SQLite DB: `db/tutorial_1_<model>.db`
+- Rollout JSON: `results/yc_bench_result_tutorial_1_<model>.json`
+- Logs: `logs/debug.log` (if using live dashboard)
+
+3. **Use the CLI directly for manual testing:**
+
+```bash
+# Set DB path for manual testing
+export DATABASE_URL="sqlite:///db/test_manual.db"
+
+# Initialize world
+uv run yc-bench run --model gemini/gemini-2.0-flash-exp --seed 42 --config easy
+# (Ctrl+C after first turn to keep DB)
+
+# Query state manually
+uv run yc-bench company status
+uv run yc-bench employee list
+uv run yc-bench market browse --limit 10
+uv run yc-bench task list
+```
+
+## Code Style and Standards
+
+### Python Style
+
+- **Follow PEP 8** with 100-character line length
+- **Use type hints** for function signatures
+- **Prefer `from __future__ import annotations`** for cleaner type syntax
+- **Docstrings:** Use for complex functions; keep them concise
+
+### Import Order
+
+```python
+from __future__ import annotations  # Always first
+
+import json                        # stdlib
+import logging
+from dataclasses import dataclass
+
+from sqlalchemy.orm import Session  # third-party
+from pydantic import BaseModel
+
+from ..db.models import Company     # local
+from ..config import get_config
+```
+
+### Database Access
+
+- **CLI commands:** Use `get_db()` context manager (auto-commit)
+- **Services:** Accept `db: Session` parameter
+- **Always flush** after mutations: `db.flush()`
+- **Use UUIDs** for primary keys (not auto-increment integers)
+
+### Error Handling
+
+- **CLI commands:** Return JSON errors via `error_output("message")`
+- **Services:** Raise exceptions with descriptive messages
+- **Agent loop:** Catch exceptions and mark terminal with `TerminalReason.ERROR`
+
+### Configuration
+
+- **All tunable parameters** live in `config/schema.py`
+- **Add new parameters** to appropriate Pydantic model
+- **Document meaning** in inline comments
+- **Provide sensible defaults** in field factories
+
+## How to Add New Features
+
+### Adding a New CLI Command
+
+1. **Choose the appropriate module:**
+   - Company queries → `cli/company_commands.py`
+   - Employee operations → `cli/employee_commands.py`
+   - Task lifecycle → `cli/task_commands.py`
+   - Market browsing → `cli/market_commands.py`
+   - Financial data → `cli/finance_commands.py`
+   - Reports → `cli/report_commands.py`
+   - Simulation control → `cli/sim_commands.py`
+   - Agent memory → `cli/scratchpad_commands.py`
+
+2. **Define the command:**
+
+```python
+# cli/task_commands.py
+from . import get_db, json_output, error_output
+
+@task_app.command("priority")
+def set_task_priority(
+    task_id: UUID = typer.Option(..., help="Task ID to update"),
+    priority: int = typer.Option(..., help="Priority level (1-10)"),
+):
+    """Set the priority level for a task."""
+    with get_db() as db:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            error_output("Task not found")
+        
+        task.priority = priority
+        db.flush()
+        
+        json_output({
+            "task_id": str(task_id),
+            "priority": priority,
+            "status": "updated",
+        })
+```
+
+3. **Test the command:**
+
+```bash
+uv run yc-bench task priority --task-id <uuid> --priority 5
+```
+
+4. **Add to agent tool schema** (if agent-accessible):
+
+Edit `agent/tools/run_command_schema.py` to document the new command.
+
+### Modifying Simulation Mechanics
+
+**Example: Change prestige decay formula**
+
+1. **Locate the implementation:**
+
+   `core/engine.py:apply_prestige_decay()`
+
+2. **Modify the formula:**
+
+```python
+def apply_prestige_decay(db: Session, company_id: UUID, days_elapsed: float) -> None:
+    wc = get_world_config()
+    if wc.prestige_decay_per_day <= 0 or days_elapsed <= 0:
+        return
+    
+    # New formula: exponential decay instead of linear
+    decay_rate = Decimal(str(wc.prestige_decay_per_day))
+    floor = Decimal(str(wc.prestige_min))
+    
+    rows = db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
+    for row in rows:
+        # Exponential: prestige *= (1 - rate)^days
+        multiplier = (Decimal(1) - decay_rate) ** Decimal(str(days_elapsed))
+        row.prestige_level = max(floor, row.prestige_level * multiplier)
+    
+    db.flush()
+```
+
+3. **Test with a benchmark run:**
+
+```bash
+uv run yc-bench run --model gemini/gemini-2.0-flash-exp --seed 1 --config medium
+```
+
+4. **Compare results:**
+
+Inspect prestige values in the rollout JSON or query the DB directly.
+
+### Creating New Agent Runtimes
+
+To support a custom agent architecture or new LLM provider:
+
+1. **Create runtime file:**
+
+```python
+# agent/runtime/my_runtime.py
+from __future__ import annotations
+
+from .base import AgentRuntime
+from .schemas import RuntimeTurnRequest, RuntimeTurnResult
+
+class MyRuntime(AgentRuntime):
+    def __init__(self, settings, command_executor):
+        self.settings = settings
+        self.command_executor = command_executor
+        self.sessions = {}  # session_id -> conversation history
+    
+    def run_turn(self, request: RuntimeTurnRequest) -> RuntimeTurnResult:
+        session_id = request.session_id
+        user_input = request.user_input
+        
+        # 1. Load/create conversation history
+        if session_id not in self.sessions:
+            self.sessions[session_id] = []
+        
+        history = self.sessions[session_id]
+        history.append({"role": "user", "content": user_input})
+        
+        # 2. Call your LLM
+        response = self._call_llm(history)
+        
+        # 3. Execute tool calls
+        tool_results = []
+        for tool_call in response.get("tool_calls", []):
+            result = self.command_executor(tool_call["command"])
+            tool_results.append(result)
+        
+        # 4. Check for sim resume
+        resume_payload = None
+        checkpoint_advanced = False
+        for result in tool_results:
+            if "sim resume" in result.get("command", ""):
+                resume_payload = result.get("payload")
+                checkpoint_advanced = True
+        
+        # 5. Save assistant response
+        history.append({"role": "assistant", "content": response["text"]})
+        
+        return RuntimeTurnResult(
+            final_output=response["text"],
+            resume_payload=resume_payload,
+            checkpoint_advanced=checkpoint_advanced,
+            turn_cost_usd=response.get("cost", 0.0),
+            raw_result={"tool_calls": tool_results},
+        )
+    
+    def clear_session(self, session_id: str):
+        self.sessions.pop(session_id, None)
+    
+    def _call_llm(self, history):
+        # Your LLM API call here
+        pass
+```
+
+2. **Register in factory:**
+
+```python
+# agent/runtime/factory.py
+from .my_runtime import MyRuntime
+
+def build_runtime(settings, command_executor):
+    if settings.model.startswith("my-provider/"):
+        return MyRuntime(settings, command_executor)
+    # ... existing logic
+```
+
+3. **Test:**
+
+```bash
+uv run yc-bench run --model my-provider/my-model --seed 1 --config tutorial
+```
+
+### Adding New Configuration Parameters
+
+1. **Update schema:**
+
+```python
+# config/schema.py
+class WorldConfig(BaseModel):
+    # ... existing fields ...
+    
+    # New parameter: max simultaneous tasks per employee
+    max_tasks_per_employee: int = 3
+```
+
+2. **Use in code:**
+
+```python
+# cli/task_commands.py
+from ..config import get_world_config
+
+@task_app.command("assign")
+def assign_task(task_id: UUID, employee_id: UUID):
+    with get_db() as db:
+        cfg = get_world_config()
+        
+        # Check constraint
+        current_tasks = db.query(TaskAssignment).filter(
+            TaskAssignment.employee_id == employee_id
+        ).count()
+        
+        if current_tasks >= cfg.max_tasks_per_employee:
+            error_output(f"Employee already assigned to {current_tasks} tasks (max {cfg.max_tasks_per_employee})")
+        
+        # ... existing logic ...
+```
+
+3. **Add to presets:**
+
+```toml
+# config/presets/hard.toml
+[world]
+max_tasks_per_employee = 2  # Harder: less multitasking allowed
+```
+
+## Pull Request Process
+
+### Before Submitting
+
+1. **Test your changes:**
+   - Run at least one full benchmark with `tutorial` or `easy` preset
+   - Verify no runtime errors or crashes
+   - Check that JSON output is well-formed
+
+2. **Check code quality:**
+   - Remove debug print statements
+   - Add docstrings to new functions/classes
+   - Ensure type hints are present
+   - Follow existing code style
+
+3. **Update documentation:**
+   - If adding a new CLI command, document it in `/docs/api-reference/`
+   - If changing mechanics, update `/docs/how-it-works/`
+   - If adding config parameters, document them in `/docs/configuration/`
+
+### Submitting a PR
+
+1. **Fork the repository** and create a feature branch:
+
+```bash
+git checkout -b feature/my-new-feature
+```
+
+2. **Commit your changes:**
+
+```bash
+git add .
+git commit -m "Add task priority CLI command"
+```
+
+Commit message format:
+- Use imperative mood ("Add" not "Added")
+- Keep first line under 72 characters
+- Add details in body if needed
+
+3. **Push to your fork:**
+
+```bash
+git push origin feature/my-new-feature
+```
+
+4. **Open a pull request** on GitHub:
+   - **Title:** Clear, concise description (e.g., "Add task priority command")
+   - **Description:**
+     - What does this PR do?
+     - Why is this change needed?
+     - How was it tested?
+     - Any breaking changes?
+
+5. **Respond to review feedback:**
+   - Address reviewer comments
+   - Push updates to the same branch
+   - Mark conversations as resolved when addressed
+
+### PR Checklist
+
+- [ ] Code follows project style (PEP 8, type hints, imports)
+- [ ] No debug print statements or commented-out code
+- [ ] Changes tested with at least one benchmark run
+- [ ] Documentation updated (if adding features)
+- [ ] Commit messages are clear and descriptive
+- [ ] No merge conflicts with `main`
+
+## Areas for Contribution
+
+### High Priority
+
+- **Test suite:** Add pytest-based tests for core mechanics, CLI commands, and agent loop
+- **Metrics dashboard:** Extend `runner/dashboard.py` with more visualizations
+- **Multi-agent support:** Allow multiple agents to compete on the same world seed
+- **Evaluation framework:** Automated scoring and leaderboard generation
+
+### New Features
+
+- **Task dependencies:** Tasks that unlock after completing prerequisites
+- **Employee hiring/firing:** Dynamic workforce management
+- **Market events:** Random external shocks (funding rounds, competitor launches)
+- **Custom domains:** Allow users to define their own domain types
+- **Visualization tools:** Plot prestige curves, cash flow, task timelines
+
+### Documentation
+
+- **Tutorial videos:** Walkthrough of CLI commands and strategy
+- **Example strategies:** Annotated rollouts showing good vs. bad decisions
+- **API reference completeness:** Full CLI command documentation
+- **Developer guides:** Deep dives into specific subsystems
+
+### Performance
+
+- **Profiling:** Identify and optimize slow DB queries
+- **Batch operations:** Reduce DB round-trips in CLI commands
+- **Parallel benchmarks:** Run multiple seeds in parallel without conflicts
+
+## Code of Conduct
+
+YC-Bench is an open-source project. We expect contributors to:
+
+- **Be respectful** of other contributors and maintainers
+- **Provide constructive feedback** in code reviews
+- **Focus on technical merit** rather than personal preferences
+- **Credit others' work** when building on existing code
+
+If you encounter any issues, contact the maintainers at [info@collinear.ai](mailto:info@collinear.ai).
+
+## Getting Help
+
+- **GitHub Issues:** For bug reports and feature requests
+- **GitHub Discussions:** For questions and community chat
+- **Email:** [info@collinear.ai](mailto:info@collinear.ai) for security issues
+
+## Repository
+
+YC-Bench is hosted at [github.com/collinear-ai/yc-bench](https://github.com/collinear-ai/yc-bench).
+
+Thank you for contributing to YC-Bench!

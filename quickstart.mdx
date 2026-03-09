@@ -1,80 +1,362 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Run your first YC-Bench evaluation in 5 minutes
 ---
 
-## Get started in three steps
+This guide walks you through running your first YC-Bench evaluation from installation to results.
 
-Get your documentation site running locally and make your first customization.
+## Option 1: One-Command Quickstart
 
-### Step 1: Set up your local environment
+The fastest way to get started is using the interactive launcher:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+curl -sSL https://raw.githubusercontent.com/collinear-ai/yc-bench/main/start.sh | bash
+```
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This script will:
+- Install `uv` if missing
+- Clone the repository (or update if already cloned)
+- Launch the interactive setup wizard
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+The script is safe to run multiple times. It will update an existing installation rather than duplicate it.
 </Note>
+
+## Option 2: Manual Setup
+
+If you've already [installed YC-Bench](/installation), launch the interactive wizard:
+
+```bash
+cd yc-bench
+uv run yc-bench start
+```
+
+## Interactive Setup
+
+The `yc-bench start` command guides you through a 3-step setup:
+
+<Steps>
+
+<Step title="Choose difficulty preset">
+
+Select a configuration preset:
+
+```
+┌─ Step 1/3 ─ Configure the eval ────────────────────────────┐
+│                                                              │
+│  #   Preset           Horizon  Team    Tasks      Description│
+│  1   Tutorial         1 yr     10 emp  200 tasks  Learn the basics │
+│  2   Easy             1 yr     10 emp  200 tasks  Gentle intro │
+│  3   Medium (recommended) 1 yr 10 emp  200 tasks  Prestige + specialization │
+│  4   Hard             1 yr     10 emp  200 tasks  Deadline pressure │
+│  5   Nightmare        1 yr     10 emp  200 tasks  Sustained perfection │
+│                                                              │
+│  0   Custom           (build your own config)               │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+Enter number [3]: 
+```
+
+**Recommendation**: Start with `3` (Medium) to experience the core prestige mechanics.
+
+You'll also be prompted for a seed:
+```
+Seed [1]: 1
+```
+
+Seeds produce deterministic worlds. Use the same seed across models for fair comparisons.
+
+</Step>
+
+<Step title="Select a model">
+
+Choose from popular models:
+
+```
+┌─ Step 2/3 ─ Choose a model ────────────────────────────────┐
+│                                                              │
+│  #   Provider    Model                      Model ID        │
+│                                                              │
+│  1   Anthropic   Claude Opus 4.6            anthropic/claude-opus-4-6 │
+│  2   Anthropic   Claude Sonnet 4.6          anthropic/claude-sonnet-4-6 │
+│  3   Anthropic   Claude Haiku 4.5           anthropic/claude-haiku-4-5-20251001 │
+│                                                              │
+│  4   OpenAI      GPT-5.2                    openai/gpt-5.2  │
+│  5   OpenAI      GPT-5.1 Mini               openai/gpt-5.1-mini │
+│  6   OpenAI      o4-mini                    openai/o4-mini  │
+│                                                              │
+│  7   Google      Gemini 3.1 Pro             openrouter/google/gemini-3.1-pro-preview │
+│  8   Google      Gemini 3 Flash            openrouter/google/gemini-3-flash-preview │
+│  9   Google      Gemini 2.5 Flash (free)   openrouter/google/gemini-2.5-flash-preview:free │
+│                                                              │
+│  0   Custom model ID                                        │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+Enter number [1]: 
+```
+
+Select any model your API key supports. Option `0` lets you enter a custom LiteLLM model string.
+
+</Step>
+
+<Step title="Configure API key">
+
+The wizard will detect any API keys in your environment or `.env` file:
+
+```
+┌─ Step 3/3 ─ API key ───────────────────────────────────────┐
+│                                                              │
+│  Found ANTHROPIC_API_KEY in environment: sk-ant-...6x2f    │
+│  Use this key? [Y/n]: y                                     │
+│                                                              │
+│  > Detected: Anthropic key                                  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+If no key is found, you'll be prompted to paste one. The wizard auto-detects the provider by key prefix.
+
+</Step>
+
+</Steps>
+
+## Running the Benchmark
+
+Once configured, the benchmark launches automatically:
+
+```bash
+┌─ Launching ────────────────────────────────────────────────┐
+│                                                              │
+│  yc-bench run --model anthropic/claude-sonnet-4-6          │
+│               --seed 1                                      │
+│               --config medium                               │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+The agent loop begins:
+
+```
+[2025-01-01 09:00] Turn 1 — Company Status
+  Funds: $150,000.00
+  Monthly Payroll: $32,400.00
+  Runway: ~4.6 months
+  Prestige: research=1.0 inference=1.0 data=1.0 training=1.0
+
+[Turn 1] Agent → run_command("yc-bench company status")
+[Turn 1] ← {"funds": 15000000, "prestige": {...}, ...}
+
+[Turn 2] Agent → run_command("yc-bench market browse --required-prestige-lte 1")
+[Turn 2] ← {"tasks": [{"id": "abc123", "domains": ["research"], ...}], ...}
+
+[Turn 3] Agent → run_command("yc-bench task accept --task-id abc123")
+[Turn 3] ← {"success": true, "deadline": "2025-01-15", ...}
+```
+
+### Live Dashboard
+
+By default, YC-Bench displays a live terminal dashboard with:
+- Current simulation time and turn count
+- Funds, runway, and prestige across domains
+- Active and planned tasks
+- Recent events (task completions, payroll, etc.)
+
+To disable the dashboard, run with `--no-live`:
+
+```bash
+uv run yc-bench run --model MODEL --seed 1 --config medium --no-live
+```
+
+## Understanding the Output
+
+A typical run produces:
+
+### Console Output
+
+Real-time agent actions and events:
+```
+[2025-01-08 14:30] Turn 18 — Task Milestone
+  Task abc123 (research): 50% complete
+  Estimated completion: 2025-01-12 (3 days before deadline)
+
+[Turn 18] Agent → run_command("yc-bench task inspect --task-id abc123")
+[Turn 18] ← {"progress": 0.5, "assigned": [{"id": "emp456", ...}], ...}
+
+[2025-01-12 17:00] Turn 24 — Task Complete
+  Task abc123: SUCCESS
+  Reward: $35,400 + prestige delta +0.12 (research)
+  Employee emp456: salary bump $3,200 → $3,232 (+1%)
+```
+
+### Database Output
+
+Full run history stored in SQLite:
+```
+db/run_<model>_seed<N>_<timestamp>.db
+```
+
+The database contains:
+- Complete event log (task acceptances, completions, payroll, etc.)
+- Company state snapshots per turn
+- Employee history (assignments, skill progression, salary changes)
+- Financial ledger (all transactions)
+
+### JSON Rollout
+
+Structured summary of the entire run:
+```
+results/run_<model>_seed<N>_<timestamp>.json
+```
+
+Includes:
+- Final company state (funds, prestige, task counts)
+- Turn-by-turn agent actions and LLM responses
+- Performance metrics (success rate, prestige growth, bankruptcy status)
+
+## Example: First Few Turns
+
+Here's what a typical agent does in the first 10 turns:
+
+<Steps>
+
+<Step title="Turn 1-2: Observe initial state">
+
+```bash
+Agent: run_command("yc-bench company status")
+← {"funds": 15000000, "prestige": {"research": 1.0, ...}, "runway_months": 4.6}
+
+Agent: run_command("yc-bench employee list")
+← {"employees": [{"id": "emp1", "tier": "mid", "salary": 7200}, ...]}
+```
+
+The agent learns:
+- Starting funds: $150,000
+- Monthly burn: $32,400
+- Runway: ~4.6 months before bankruptcy
+- 10 employees (5 junior, 3 mid, 2 senior)
+
+</Step>
+
+<Step title="Turn 3-5: Browse and accept tasks">
+
+```bash
+Agent: run_command("yc-bench market browse --required-prestige-lte 1 --limit 20")
+← {"tasks": [{"id": "task1", "domains": ["research"], "required_prestige": 1, 
+               "reward": 3540000, "required_qty": {"research": 1200}}, ...]}
+
+Agent: run_command("yc-bench task accept --task-id task1")
+← {"success": true, "deadline": "2025-01-15"}
+
+Agent: run_command("yc-bench task accept --task-id task2")
+← {"success": true, "deadline": "2025-01-18"}
+```
+
+The agent accepts 2-3 prestige-1 tasks to generate initial revenue.
+
+</Step>
+
+<Step title="Turn 6-8: Assign employees and dispatch">
+
+```bash
+Agent: run_command("yc-bench task assign --task-id task1 --employee-id emp3")
+Agent: run_command("yc-bench task assign --task-id task1 --employee-id emp5")
+← {"success": true}
+
+Agent: run_command("yc-bench task dispatch --task-id task1")
+← {"success": true, "status": "active"}
+```
+
+The agent assigns multiple employees to each task and starts work.
+
+</Step>
+
+<Step title="Turn 9-10: Resume simulation">
+
+```bash
+Agent: run_command("yc-bench sim resume")
+← {"events": [{"type": "task_half", "task_id": "task1", "progress": 0.25}],
+    "sim_time": "2025-01-05 11:30"}
+```
+
+Time advances to the next event (first progress checkpoint at 25%).
+
+</Step>
+
+</Steps>
+
+## What Happens Next
+
+After the first few tasks, the agent must:
+
+1. **Monitor progress** — Use checkpoint events to estimate employee productivity
+2. **Climb prestige** — Complete tasks to unlock higher-prestige (higher-reward) tasks
+3. **Specialize domains** — Focus on 2-3 domains rather than spreading thin
+4. **Manage capacity** — Balance parallelism (throughput splitting) vs focus
+5. **Avoid bankruptcy** — Maintain runway while climbing the prestige ladder
+
+## Advanced: Command-Line Run
+
+Skip the interactive wizard and run directly:
+
+```bash
+uv run yc-bench run \
+  --model anthropic/claude-sonnet-4-6 \
+  --seed 1 \
+  --config medium
+```
+
+### All Options
+
+```bash
+uv run yc-bench run \
+  --model MODEL_ID \
+  --seed SEED \
+  --config PRESET_NAME \
+  --horizon-years YEARS \
+  --company-name "Your Startup" \
+  --start-date 2025-01-01 \
+  --no-live
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--model` | LiteLLM model string (required) | — |
+| `--seed` | Random seed for world generation (required) | — |
+| `--config` | Preset name (`tutorial`, `easy`, `medium`, `hard`, `nightmare`) or path to `.toml` file | `default` |
+| `--horizon-years` | Override simulation length | From preset |
+| `--company-name` | Company name in the simulation | `BenchCo` |
+| `--start-date` | Simulation start date (YYYY-MM-DD) | `2025-01-01` |
+| `--no-live` | Disable live dashboard | Dashboard enabled |
+
+## Running Multiple Models in Parallel
+
+Benchmark multiple models on the same seed:
+
+```bash
+bash scripts/run_benchmark.sh --seed 1 --config hard
+```
+
+This script runs all models defined in `scripts/run_benchmark.sh` in parallel, making it easy to compare performance across models.
+
+<Warning>
+**API costs**: Running multiple models in parallel will consume API credits faster. Monitor your usage.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Reference" icon="terminal" href="/cli/run">
+    Complete guide to all YC-Bench CLI commands
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration/presets">
+    Customize presets and create your own difficulty settings
+  </Card>
+  <Card title="Understanding Results" icon="chart-line" href="/concepts/scoring">
+    Interpret benchmark output and performance metrics
+  </Card>
+  <Card title="Simulation Mechanics" icon="gears" href="/concepts/simulation-mechanics">
+    Learn how the simulation engine works
+  </Card>
+</CardGroup>

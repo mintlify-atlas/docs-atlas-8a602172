@@ -1,0 +1,406 @@
+---
+title: Architecture
+description: YC-Bench project structure, core modules, and data flow
+---
+
+## Overview
+
+YC-Bench is a deterministic long-horizon benchmark where an LLM agent plays the CEO of an AI startup. The system is built as a discrete-event simulation with a CLI interface, backed by SQLite, and orchestrated by an agent runtime loop.
+
+## Project Structure
+
+```
+src/yc_bench/
+├── cli/              # Command-line interface (Typer commands)
+├── agent/            # Agent runtime and execution loop
+├── core/             # Simulation engine and event processing
+├── db/               # Database models (SQLAlchemy)
+├── config/           # Configuration system and presets
+├── services/         # World generation utilities
+└── runner/           # Benchmark orchestration and dashboard
+```
+
+## Key Modules
+
+### CLI (`cli/`)
+
+The agent interacts with the simulation exclusively through JSON-returning CLI commands built with [Typer](https://typer.tiangolo.com/).
+
+**Key files:**
+- `__init__.py` - Main Typer app and command registration
+- `sim_commands.py` - Time advancement (`sim resume`)
+- `company_commands.py` - Company status and prestige queries
+- `employee_commands.py` - Employee listing and inspection
+- `task_commands.py` - Task lifecycle (accept, assign, dispatch, cancel, inspect)
+- `market_commands.py` - Market task browsing
+- `finance_commands.py` - Ledger and transaction history
+- `report_commands.py` - Monthly P&L reports
+- `scratchpad_commands.py` - Persistent agent memory
+- `start_command.py` - Interactive quickstart wizard
+
+**Design principles:**
+- All commands return JSON (via `json_output()` helper)
+- All commands use transactional DB sessions (`get_db()` context manager)
+- Error messages returned as JSON with `{"error": "message"}`
+- Commands are stateless — all state lives in the database
+
+### Agent (`agent/`)
+
+Handles the LLM agent runtime, conversation management, and tool execution.
+
+**Key files:**
+- `loop.py` - Main agent execution loop (`run_agent_loop()`)
+- `prompt.py` - System prompt and turn context builders
+- `run_state.py` - Tracks turn count, costs, terminal state
+- `runtime/base.py` - Abstract runtime interface
+- `runtime/litellm_runtime.py` - LiteLLM-based implementation
+- `runtime/factory.py` - Runtime instantiation
+- `commands/executor.py` - CLI command execution wrapper
+- `commands/policy.py` - Safety policies (prevents destructive operations)
+
+**Agent loop flow:**
+1. Build turn context (sim state snapshot + history)
+2. Call LLM runtime with tool schema (`run_command`)
+3. Execute tool calls sequentially via `command_executor`
+4. Check if agent called `sim resume` (checkpoint advancement)
+5. If no resume after N turns, force auto-advance
+6. Check terminal conditions (bankruptcy, horizon end, max turns)
+7. Record turn transcript and costs
+8. Repeat until terminal
+
+**History management:**
+- Only the last `history_keep_rounds` conversation rounds are kept in context
+- Older turns are truncated but preserved in the rollout JSON
+- Scratchpad provides persistent memory across truncation
+
+### Core (`core/`)
+
+The discrete-event simulation engine.
+
+**Key files:**
+- `engine.py` - Time advancement and event dispatch (`advance_time()`)
+- `progress.py` - Task work accumulation (`flush_progress()`)
+- `eta.py` - ETA calculation and milestone scheduling
+- `events.py` - Event insertion, fetching, consumption
+- `business_time.py` - Business day calculations, payroll boundaries
+- `handlers/` - Event handlers (task completion, bankruptcy, horizon end)
+
+**Simulation loop (in `engine.py:advance_time()`):**
+
+```python
+while current_time < target_time:
+    # 1. Find next action: min(next_event, next_payroll, target_time)
+    # 2. Flush work progress from current_time → action_time
+    # 3. Apply prestige decay proportional to elapsed days
+    # 4. Process action:
+    #    - If payroll: deduct salaries, bankruptcy check, STOP (wake agent)
+    #    - If event: dispatch to handler, consume event
+    #      - Task milestone (25%, 50%, 75%): wake agent
+    #      - Task complete: award funds/prestige, update ETAs
+    #      - Bankruptcy/horizon: terminal condition
+    #    - If target: stop
+    # 5. Update sim_time, loop
+```
+
+**Event types:**
+- `TASK_HALF_PROGRESS` - Milestone checkpoints (25%, 50%, 75%)
+- `TASK_COMPLETED` - Task reaches 100% completion
+- `BANKRUPTCY` - Funds drop below zero
+- `HORIZON_END` - Simulation time limit reached
+
+**Determinism:**
+- All randomness uses seeded RNGs during world generation
+- Task progress is computed deterministically from employee skill rates
+- Event processing order is deterministic (payroll → event → target at same timestamp)
+
+### Database (`db/`)
+
+SQLAlchemy ORM models for all simulation state.
+
+**Key models (`db/models/`):**
+- `company.py` - Company funds, prestige per domain (4 domains)
+- `employee.py` - Employee tier, salary, skill rates per domain
+- `task.py` - Task status (market/planned/active/complete), requirements, progress
+- `sim_state.py` - Current sim_time, horizon_end, seed
+- `event.py` - Scheduled events with payload and dedupe_key
+- `ledger.py` - Financial transaction log (payroll, task rewards)
+- `scratchpad.py` - Agent's persistent notes
+- `session.py` - Conversation transcript (for rollout export)
+
+**Database session lifecycle:**
+- CLI commands: one session per command (auto-commit on success)
+- Agent loop: separate session per DB query (via `db_factory()`)
+- World seeding: single transactional session
+
+### Config (`config/`)
+
+Pydantic-validated configuration system.
+
+**Key files:**
+- `schema.py` - Pydantic models for all experiment parameters
+- `loader.py` - TOML → Pydantic validation and loading
+- `sampling.py` - Distribution families (Beta, Normal, Triangular, Uniform)
+- `presets/` - Difficulty presets (tutorial, easy, medium, hard, nightmare)
+
+**Configuration hierarchy:**
+```python
+ExperimentConfig
+├── agent: AgentConfig       # model, temperature, history_keep_rounds
+├── loop: LoopConfig         # auto_advance_after_turns, max_turns
+├── sim: SimConfig           # start_date, horizon_years, company_name
+└── world: WorldConfig       # funds, employees, tasks, prestige rules
+    ├── dist: WorldDists     # sampling distributions for world gen
+    └── salary tiers         # junior/mid/senior configs
+```
+
+**Loading order:**
+1. Load preset TOML from `config/presets/{name}.toml`
+2. Parse and validate with Pydantic
+3. CLI flags override config values (e.g., `--model`, `--horizon-years`)
+4. Export to `YC_BENCH_EXPERIMENT` env var for CLI subprocess access
+
+### Services (`services/`)
+
+World generation utilities.
+
+**Key files:**
+- `seed_world.py` - Orchestrates world seeding
+- `generate_employees.py` - Creates 10 employees with random skill distributions
+- `generate_tasks.py` - Generates market task pool with random requirements
+- `rng.py` - Seeded random number generator utilities
+
+**World generation flow:**
+1. Seed company with initial funds
+2. Create prestige entries for 4 domains (research, inference, data, training)
+3. Generate employees with tier-stratified salaries and per-domain skill rates
+4. Generate market tasks with prestige requirements, rewards, domain requirements
+
+### Runner (`runner/`)
+
+Benchmark orchestration and live dashboard.
+
+**Key files:**
+- `main.py` - Entrypoint: DB setup, world init, agent loop invocation
+- `dashboard.py` - Rich-based live terminal UI (funds, prestige, tasks, turn log)
+- `args.py` - CLI argument parsing
+- `session.py` - Session ID generation
+
+**Benchmark flow (`main.py:run_benchmark()`):**
+1. Load experiment config (preset or TOML path)
+2. Create/resume SQLite database
+3. Seed world if not already initialized
+4. Build agent runtime (LiteLLM + command executor)
+5. Initialize run state (tracks turns, costs, terminal reason)
+6. Start live dashboard (if in TTY)
+7. Run agent loop until terminal
+8. Save rollout JSON to `results/`
+9. Print summary (turns, cost, final funds, outcome)
+
+## Data Flow
+
+### Agent Turn Cycle
+
+```
+┌─────────────────────────────────────────────────┐
+│ 1. Build turn context                           │
+│    - Snapshot DB state (funds, tasks, prestige) │
+│    - Load last N conversation rounds            │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ 2. Call LLM runtime                             │
+│    - Send context + tool schema                 │
+│    - LLM responds with tool calls               │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ 3. Execute tool calls                           │
+│    - For each tool call:                        │
+│      - run_command("yc-bench ...")              │
+│      - CLI command reads/writes DB              │
+│      - Return JSON result                       │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ 4. Check checkpoint advancement                 │
+│    - Did agent call "sim resume"?               │
+│    - If yes: extract wake events                │
+│    - If no for N turns: force auto-advance      │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ 5. Check terminal conditions                    │
+│    - Bankruptcy? Horizon end? Max turns?        │
+│    - If terminal: mark reason and stop          │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ 6. Record turn                                  │
+│    - Save transcript (user input + agent output)│
+│    - Update cost accumulator                    │
+│    - Truncate old conversation rounds           │
+└─────────────────────────────────────────────────┘
+```
+
+### Time Advancement Flow
+
+When the agent calls `yc-bench sim resume`:
+
+```
+┌─────────────────────────────────────────────────┐
+│ CLI: sim_commands.py:resume()                   │
+│ - Load current sim_time from DB                 │
+│ - Determine target_time (next event or +7 days) │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ Engine: engine.py:advance_time()                │
+│ Loop until current_time >= target_time:         │
+│   1. Find min(next_event, next_payroll, target) │
+│   2. Flush progress: update task completion     │
+│   3. Apply prestige decay (all domains)         │
+│   4. Process action (payroll/event/target)      │
+│   5. Update sim_time in DB                      │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│ Return wake events to agent                     │
+│ - monthly_payroll: funds after payroll          │
+│ - task_half: milestone checkpoint (25/50/75%)   │
+│ - task_completed: success, funds_delta          │
+│ - bankruptcy: terminal                          │
+│ - horizon_end: terminal                         │
+└─────────────────────────────────────────────────┘
+```
+
+## Extension Points
+
+### Adding New CLI Commands
+
+1. Create a new command function in the appropriate `cli/*_commands.py` file
+2. Use `@app.command()` decorator (where `app` is the Typer sub-app)
+3. Query/mutate DB using `get_db()` context manager
+4. Return JSON via `json_output(data)` or `error_output(message)`
+5. Add command to agent tool schema in `agent/tools/run_command_schema.py` if agent-accessible
+
+Example:
+
+```python
+# cli/task_commands.py
+@task_app.command("priority")
+def set_task_priority(
+    task_id: UUID = typer.Option(...),
+    priority: int = typer.Option(...),
+):
+    with get_db() as db:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            error_output("Task not found")
+        task.priority = priority
+        db.flush()
+        json_output({"task_id": str(task_id), "priority": priority})
+```
+
+### Customizing Simulation Mechanics
+
+**Modify prestige mechanics:**
+- Edit `core/engine.py:apply_prestige_decay()` for decay formula
+- Edit `core/handlers/task_complete.py` for prestige rewards
+- Edit `cli/task_commands.py:accept()` for prestige gating logic
+
+**Change task progress calculation:**
+- Edit `core/progress.py:flush_progress()` for work accumulation
+- Edit `core/eta.py:recalculate_etas()` for ETA logic
+- Adjust `prestige_qty_scale` in config to change prestige→work scaling
+
+**Add new event types:**
+1. Add enum variant to `db/models/event.py:EventType`
+2. Create handler in `core/handlers/my_event.py`
+3. Register handler in `core/engine.py:dispatch_event()`
+4. Insert events via `core/events.py:insert_event()`
+
+### Creating New Agent Runtimes
+
+To support a new LLM provider or custom agent architecture:
+
+1. Subclass `agent/runtime/base.py:AgentRuntime`
+2. Implement `run_turn(request: RuntimeTurnRequest) -> RuntimeTurnResult`
+3. Implement `clear_session(session_id: str)`
+4. Register in `agent/runtime/factory.py:build_runtime()`
+
+Example:
+
+```python
+# agent/runtime/my_runtime.py
+from .base import AgentRuntime
+from .schemas import RuntimeTurnRequest, RuntimeTurnResult
+
+class MyRuntime(AgentRuntime):
+    def run_turn(self, request):
+        # 1. Load conversation history for session_id
+        # 2. Append user_input to history
+        # 3. Call your LLM with tool schema
+        # 4. Execute tool calls via command_executor
+        # 5. Return RuntimeTurnResult with:
+        #    - final_output: agent's final response
+        #    - resume_payload: if "sim resume" was called
+        #    - checkpoint_advanced: bool
+        #    - turn_cost_usd: float
+        #    - raw_result: dict for logging
+        pass
+    
+    def clear_session(self, session_id):
+        # Remove conversation history for session_id
+        pass
+```
+
+### Modifying Configuration
+
+**Create a custom preset:**
+
+1. Copy `src/yc_bench/config/presets/default.toml`
+2. Edit parameters (see `config/schema.py` for all options)
+3. Save as `my_preset.toml`
+4. Run with `--config my_preset` or `--config /path/to/my_preset.toml`
+
+**Tunable parameters:**
+- Initial funds, employees, market tasks
+- Prestige decay rate, min/max bounds, reward scale
+- Deadline pressure, penalty multipliers
+- Salary bump rate, work hours per day
+- Sampling distributions for world generation (see `WorldDists`)
+- Agent model, temperature, history window
+- Auto-advance threshold, max turns
+
+### Custom Metrics and Logging
+
+Inject callbacks into the agent loop:
+
+```python
+def on_turn_start(turn_num):
+    print(f"Starting turn {turn_num}")
+
+def on_turn(snapshot, run_state, commands_executed):
+    # snapshot: current sim state (funds, tasks, prestige)
+    # run_state: turn count, costs, terminal status
+    # commands_executed: list of CLI commands run this turn
+    log_metrics(snapshot, run_state)
+
+run_agent_loop(
+    runtime=runtime,
+    db_factory=db_factory,
+    company_id=company_id,
+    run_state=run_state,
+    on_turn_start=on_turn_start,
+    on_turn=on_turn,
+)
+```
+
+See `runner/dashboard.py` for a complete example (live terminal UI).

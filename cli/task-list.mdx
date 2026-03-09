@@ -1,0 +1,151 @@
+---
+title: "task-list"
+description: "List all company tasks with status and progress"
+---
+
+# `yc-bench task-list`
+
+Display all tasks owned by your company, including planned, in-progress, completed, and cancelled tasks.
+
+## Usage
+
+```bash
+yc-bench task-list [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="--status" type="string" optional>
+  Filter by task status: planned, in_progress, completed, or cancelled
+</ParamField>
+
+<ParamField path="--assigned-to" type="string" optional>
+  Filter by assigned employee ID
+</ParamField>
+
+<ParamField path="--sort" type="string" optional>
+  Sort by: deadline, payment, prestige, or status (default: deadline)
+</ParamField>
+
+## Response
+
+Returns array of company tasks:
+
+<ResponseField name="tasks" type="array">
+  List of all company tasks
+</ResponseField>
+
+<ResponseField name="tasks[].id" type="string">
+  Unique task identifier
+</ResponseField>
+
+<ResponseField name="tasks[].title" type="string">
+  Task title/description
+</ResponseField>
+
+<ResponseField name="tasks[].status" type="string">
+  Current status: planned, in_progress, completed, or cancelled
+</ResponseField>
+
+<ResponseField name="tasks[].payment" type="number">
+  Payment in dollars upon completion
+</ResponseField>
+
+<ResponseField name="tasks[].prestigeReward" type="number">
+  Prestige points for completion
+</ResponseField>
+
+<ResponseField name="tasks[].assignedEmployee" type="string | null">
+  ID of assigned employee, or null
+</ResponseField>
+
+<ResponseField name="tasks[].deadline" type="string">
+  Task deadline (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="tasks[].progress" type="number">
+  Completion percentage (0-100)
+</ResponseField>
+
+<ResponseField name="totalCount" type="number">
+  Total number of tasks
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  Count by status
+</ResponseField>
+
+## Example
+
+```bash
+# List all tasks
+yc-bench task-list
+```
+
+```bash
+# List only in-progress tasks
+yc-bench task-list --status in_progress
+```
+
+```bash
+# List tasks sorted by payment
+yc-bench task-list --sort payment
+```
+
+```json Example Output
+{
+  "tasks": [
+    {
+      "id": "task_123",
+      "title": "Build React dashboard",
+      "status": "in_progress",
+      "payment": 8000,
+      "prestigeReward": 3,
+      "assignedEmployee": "emp_002",
+      "deadline": "2024-02-15T00:00:00.000Z",
+      "progress": 45
+    },
+    {
+      "id": "task_124",
+      "title": "API integration",
+      "status": "planned",
+      "payment": 5000,
+      "prestigeReward": 2,
+      "assignedEmployee": "emp_003",
+      "deadline": "2024-02-20T00:00:00.000Z",
+      "progress": 0
+    },
+    {
+      "id": "task_125",
+      "title": "Mobile app bugfix",
+      "status": "completed",
+      "payment": 3000,
+      "prestigeReward": 1,
+      "assignedEmployee": null,
+      "deadline": "2024-01-10T00:00:00.000Z",
+      "progress": 100
+    }
+  ],
+  "totalCount": 3,
+  "summary": {
+    "planned": 1,
+    "in_progress": 1,
+    "completed": 1,
+    "cancelled": 0
+  }
+}
+```
+
+## Status Meanings
+
+- **planned** - Accepted, may have employee assigned, not started
+- **in_progress** - Employee actively working on task
+- **completed** - Successfully finished, payment received
+- **cancelled** - Cancelled with prestige penalty
+
+## Related Commands
+
+- [task-inspect](/cli/task-inspect) - Detailed task information
+- [task-accept](/cli/task-accept) - Accept new task from market
+- [task-assign](/cli/task-assign) - Assign employee to task
+- [task-dispatch](/cli/task-dispatch) - Start work on task

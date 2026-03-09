@@ -1,0 +1,452 @@
+---
+title: Custom Tuning
+description: How to create custom presets and tune YC-Bench for your specific testing needs
+---
+
+YC-Bench's five built-in presets test different agent capabilities, but you may want to create custom configurations to test specific scenarios. This guide shows you how.
+
+---
+
+## Basic Workflow
+
+Creating a custom preset is straightforward:
+
+1. Copy `default.toml` or another preset as a starting point
+2. Use `extends = "default"` to inherit base parameters
+3. Override only the parameters you want to change
+4. Save to `src/yc_bench/config/presets/your_preset.toml`
+5. Run with `yc-bench run --config your_preset`
+
+<Tip>
+**Best practice**: Always use `extends = "default"` unless you want to specify every parameter from scratch. This ensures you get sensible defaults for everything you don't override.
+</Tip>
+
+---
+
+## Example: High-Reward Preset
+
+Let's create a preset that tests whether agents optimize for high-reward tasks.
+
+```toml
+# src/yc_bench/config/presets/high_reward.toml
+
+extends = "default"
+
+name        = "high_reward"
+description = "Tests whether agents pursue high-reward opportunities. Some tasks pay 10× others."
+
+[sim]
+horizon_years = 1
+
+[world]
+initial_funds_cents = 20_000_000  # $200,000
+
+# Dramatically skewed reward distribution
+[world.dist.reward_funds_cents]
+type = "triangular"
+low  = 500_000       # $5,000 — poverty wages
+high = 10_000_000    # $100,000 — jackpot tasks
+mode = 2_000_000     # $20,000 — mode still low
+
+# Keep prestige accessible so reward optimization is the bottleneck
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 5
+mode = 2
+```
+
+**What this tests**:
+- Does the agent browse the market strategically looking for high-reward tasks?
+- Does it filter by reward and prioritize the jackpots?
+- Does it understand that task selection matters as much as execution?
+
+Run it:
+```bash
+yc-bench run --config high_reward
+```
+
+---
+
+## Example: Three-Domain Specialist
+
+Let's force agents to handle 3-domain tasks exclusively.
+
+```toml
+# src/yc_bench/config/presets/three_domain.toml
+
+extends = "default"
+
+name        = "three_domain"
+description = "ALL tasks span 3 domains. Tests cross-domain employee coordination."
+
+[sim]
+horizon_years = 1
+
+[world]
+initial_funds_cents = 20_000_000
+
+# Force 3-domain tasks
+[world.dist.domain_count]
+type = "constant"
+value = 3
+
+# Larger work volumes to match complexity
+[world.dist.required_qty]
+type = "triangular"
+low  = 1000
+high = 5000
+mode = 2500
+
+# Generous deadlines since task complexity is high
+deadline_qty_per_day = 250.0
+```
+
+**What this tests**:
+- Can the agent balance employees across three domains?
+- Does it understand that all three must finish for task completion?
+- Does it avoid bottlenecks by assigning optimal employee counts?
+
+---
+
+## Example: Fast Test Preset
+
+Create a quick sanity-check configuration for development.
+
+```toml
+# src/yc_bench/config/presets/fast_test.toml
+
+extends = "default"
+
+name        = "fast_test"
+description = "5-minute sanity check. 3 months, trivial tasks, huge funds."
+
+[sim]
+horizon_years = 0.25  # 3 months
+
+[loop]
+auto_advance_after_turns = 3
+max_turns = 50
+
+[world]
+num_employees = 5
+num_market_tasks = 50
+initial_funds_cents = 50_000_000  # $500,000 — essentially infinite
+
+# Trivial tasks
+[world.dist.required_prestige]
+type = "constant"
+value = 1
+
+[world.dist.domain_count]
+type = "constant"
+value = 1
+
+[world.dist.required_qty]
+type = "triangular"
+low  = 200
+high = 800
+mode = 400
+
+# Very generous deadlines
+deadline_qty_per_day = 100.0
+
+# No penalties
+penalty_fail_multiplier = 0.1
+penalty_cancel_multiplier = 0.1
+```
+
+**Purpose**: Quickly verify that:
+- The agent can complete the basic loop
+- Your infrastructure is working
+- No crashes or API errors occur
+
+Run it:
+```bash
+yc-bench run --config fast_test
+```
+
+---
+
+## Tuning Strategies
+
+### Testing Specific Capabilities
+
+| Capability | Parameters to Tune |
+|------------|--------------------|
+| **Throughput management** | Increase `deadline_qty_per_day`, reduce `world.dist.required_qty.mode` |
+| **Prestige climbing** | Increase `world.dist.required_prestige.mode`, raise `reward_prestige_scale` |
+| **Cash flow** | Reduce `initial_funds_cents`, increase `salary_bump_pct` |
+| **Multi-domain coordination** | Set `world.dist.domain_count` to triangular with mode=3 |
+| **Risk management** | Increase `penalty_fail_multiplier` and `penalty_cancel_multiplier` |
+| **Long-term planning** | Increase `horizon_years`, add aggressive `salary_bump_pct` |
+
+### Making Scenarios Easier
+
+- **Increase runway**: Raise `initial_funds_cents` or lower `num_employees`
+- **Relax deadlines**: Lower `deadline_qty_per_day` or reduce `deadline_min_biz_days`
+- **Reduce penalties**: Lower `penalty_fail_multiplier` and `penalty_cancel_multiplier`
+- **Simplify tasks**: Use `constant` distributions for `domain_count` and `required_prestige`
+- **Remove compounding**: Set `salary_bump_pct = 0.0`
+
+### Making Scenarios Harder
+
+- **Tighten runway**: Reduce `initial_funds_cents` or increase `num_employees`
+- **Compress deadlines**: Raise `deadline_qty_per_day` or increase `deadline_min_biz_days`
+- **Amplify penalties**: Raise `penalty_fail_multiplier` and `penalty_cancel_multiplier`
+- **Increase complexity**: Use high `mode` in `domain_count` and `required_qty` distributions
+- **Add compounding pressure**: Increase `salary_bump_pct` to 0.02 or higher
+- **Steepen prestige curve**: Raise `reward_prestige_scale` and `world.dist.required_prestige.mode`
+
+---
+
+## Distribution Tuning Tips
+
+### Triangular Distributions
+
+The `mode` parameter is your primary lever:
+
+```toml
+# Accessible early game (most tasks low prestige)
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 10
+mode = 2        # 70% of tasks are prestige 1-3
+
+# Gated early game (must climb first)
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 10
+mode = 6        # 70% of tasks are prestige 4-8
+```
+
+### Constant Distributions
+
+Use constant distributions to isolate specific variables:
+
+```toml
+# Remove prestige as a variable entirely
+[world.dist.required_prestige]
+type = "constant"
+value = 1
+
+# Force ALL tasks to be single-domain
+[world.dist.domain_count]
+type = "constant"
+value = 1
+```
+
+### Beta Distributions
+
+Use beta for skewed distributions with long tails:
+
+```toml
+# Rare but significant prestige gains
+[world.dist.reward_prestige_delta]
+type  = "beta"
+alpha = 1.0      # Lower alpha = more skew toward low values
+beta  = 3.0      # Higher beta = long tail
+scale = 0.5
+low   = 0.0
+high  = 0.5      # Rare tasks give +0.4 or +0.5 prestige jumps
+```
+
+---
+
+## Testing Your Custom Preset
+
+### Step 1: Validate Syntax
+
+YC-Bench will report TOML syntax errors on startup:
+
+```bash
+yc-bench run --config your_preset
+```
+
+Look for:
+- Missing required fields
+- Invalid distribution types
+- Salary tier shares that don't sum to 1.0
+
+### Step 2: Sanity-Check Economics
+
+Run a quick simulation and check the first few outputs:
+
+1. **Starting runway**: `initial_funds / (monthly_payroll)` should give you the expected number of months
+2. **Task availability**: Browse the market - are tasks accessible given your prestige distribution?
+3. **Deadline feasibility**: Can employees realistically complete typical tasks within deadlines?
+
+### Step 3: Run Full Benchmark
+
+Once validated, run a full benchmark:
+
+```bash
+yc-bench run --config your_preset --model openrouter/anthropic/claude-3.5-sonnet
+```
+
+Monitor:
+- Does the agent complete the horizon or go bankrupt early?
+- Are the failure modes what you expected?
+- Is the difficulty level appropriate for your testing goals?
+
+---
+
+## Common Pitfalls
+
+<Warning>
+**Deadlines too tight**: If `deadline_qty_per_day` is too high, even perfectly-played tasks will miss deadlines due to insufficient employee throughput.
+
+**Formula to check**: 
+```
+avg_employee_rate × num_employees × work_hours_per_day × deadline_days >= required_qty
+```
+
+If this inequality fails for typical tasks, deadlines are mathematically impossible.
+</Warning>
+
+<Warning>
+**Runway too short**: If `initial_funds / (num_employees × avg_salary)` is less than ~3 months, agents may not have time to climb prestige and reach profitability.
+
+Rule of thumb: Runway should be at least 2× the time needed to reach break-even prestige tier.
+</Warning>
+
+<Warning>
+**Salary tier shares**: The three salary tier `share` values MUST sum to exactly 1.0:
+
+```toml
+[world.salary_junior]
+share = 0.50
+
+[world.salary_mid]
+share = 0.35
+
+[world.salary_senior]
+share = 0.15    # 0.50 + 0.35 + 0.15 = 1.0 ✓
+```
+</Warning>
+
+<Warning>
+**Prestige gate lockout**: If `world.dist.required_prestige.mode` is too high and `reward_prestige_delta` is too low, agents may be unable to climb fast enough to access high-reward tasks before running out of money.
+
+Rule of thumb: `(target_prestige - 1) / avg_prestige_delta` tasks needed to climb. Ensure this is achievable within your runway.
+</Warning>
+
+---
+
+## Parameter Selection Best Practices
+
+### Start Conservative
+
+1. Begin with an existing preset (tutorial, easy, medium)
+2. Make ONE change at a time
+3. Run a test
+4. Iterate
+
+### Document Your Intent
+
+Always include a clear `description` field:
+
+```toml
+name        = "my_preset"
+description = "Tests long-term planning under compounding payroll pressure. 2-year horizon, 1.5% salary bumps, medium prestige ladder."
+```
+
+### Test Edge Cases
+
+Run your preset with:
+- Different random seeds: `yc-bench run --config your_preset --seed 123`
+- Different models: Some models may exploit weaknesses you didn't anticipate
+- Different horizons: Try both 1-year and 3-year versions
+
+---
+
+## Advanced: Multi-Preset Comparisons
+
+Create a family of related presets to test sensitivity:
+
+```bash
+# presets/reward_scale_low.toml
+reward_prestige_scale = 0.3
+
+# presets/reward_scale_medium.toml
+reward_prestige_scale = 0.55
+
+# presets/reward_scale_high.toml
+reward_prestige_scale = 0.8
+```
+
+Run all three:
+```bash
+for preset in reward_scale_low reward_scale_medium reward_scale_high; do
+  yc-bench run --config $preset --model your_model
+done
+```
+
+Compare:
+- Do agents change strategy when reward scaling is higher?
+- Is there a threshold where prestige-climbing becomes essential?
+
+---
+
+## Real-World Tuning Example
+
+**Goal**: Test whether agents can handle "burst" workloads - long quiet periods followed by deadline crunches.
+
+```toml
+# presets/burst_workload.toml
+
+extends = "default"
+
+name        = "burst_workload"
+description = "Tests burst workloads: deadlines are VERY tight but task qty is bimodal (some tiny, some huge)."
+
+[sim]
+horizon_years = 1
+
+[world]
+initial_funds_cents = 18_000_000
+
+# Bimodal task sizes: many small, some giants
+[world.dist.required_qty]
+type = "triangular"
+low  = 300          # Quick wins
+high = 8000         # All-hands-on-deck crunch
+mode = 500          # Most tasks small, but the big ones dominate
+
+# Tight deadlines across the board
+deadline_qty_per_day = 300.0
+
+# High parallelism penalty: agents must sequence carefully
+penalty_fail_multiplier = 1.6
+penalty_cancel_multiplier = 2.2
+```
+
+**What this tests**:
+- Can the agent recognize when a "giant" task appears and dedicate the team to it?
+- Does it use small tasks to fill gaps between big tasks?
+- Does it avoid accepting a giant task when another is in flight?
+
+Run it:
+```bash
+yc-bench run --config burst_workload
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Parameters" icon="sliders" href="/configuration/parameters">
+    Complete reference of all tunable parameters
+  </Card>
+  
+  <Card title="Presets" icon="layer-group" href="/configuration/presets">
+    Study the five built-in presets for tuning inspiration
+  </Card>
+</CardGroup>
+
+<Tip>
+**Share your presets!** If you create a preset that tests an interesting agent capability, consider contributing it to the YC-Bench repository.
+</Tip>

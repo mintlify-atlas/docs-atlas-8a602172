@@ -1,0 +1,169 @@
+---
+title: "market-browse"
+description: "Browse available tasks in the market"
+---
+
+# `yc-bench market-browse`
+
+View all available tasks in the market that can be accepted by your company. Tasks are filtered based on your current prestige level.
+
+## Usage
+
+```bash
+yc-bench market-browse [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="--min-payment" type="number" optional>
+  Filter tasks with payment greater than or equal to specified amount
+</ParamField>
+
+<ParamField path="--max-payment" type="number" optional>
+  Filter tasks with payment less than or equal to specified amount
+</ParamField>
+
+<ParamField path="--tier" type="string" optional>
+  Filter by required tier: junior, mid, senior, or staff
+</ParamField>
+
+<ParamField path="--min-prestige" type="number" optional>
+  Filter tasks requiring prestige >= specified value
+</ParamField>
+
+<ParamField path="--sort" type="string" optional>
+  Sort by: payment, prestige, deadline, or hours (default: payment)
+</ParamField>
+
+## Response
+
+Returns array of available market tasks:
+
+<ResponseField name="tasks" type="array">
+  List of available tasks
+</ResponseField>
+
+<ResponseField name="tasks[].id" type="string">
+  Unique task identifier
+</ResponseField>
+
+<ResponseField name="tasks[].title" type="string">
+  Task title/description
+</ResponseField>
+
+<ResponseField name="tasks[].payment" type="number">
+  Payment in dollars upon completion
+</ResponseField>
+
+<ResponseField name="tasks[].prestigeReward" type="number">
+  Prestige points gained upon completion
+</ResponseField>
+
+<ResponseField name="tasks[].requiredHours" type="number">
+  Estimated hours to complete
+</ResponseField>
+
+<ResponseField name="tasks[].requiredTier" type="string">
+  Minimum employee tier required
+</ResponseField>
+
+<ResponseField name="tasks[].requiredPrestige" type="number">
+  Minimum company prestige required to accept
+</ResponseField>
+
+<ResponseField name="tasks[].deadline" type="string">
+  Task deadline (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="tasks[].eligible" type="boolean">
+  Whether your company can currently accept this task
+</ResponseField>
+
+<ResponseField name="totalCount" type="number">
+  Total number of available tasks
+</ResponseField>
+
+<ResponseField name="companyPrestige" type="number">
+  Your current prestige level
+</ResponseField>
+
+## Example
+
+```bash
+# Browse all available tasks
+yc-bench market-browse
+```
+
+```bash
+# Find high-paying tasks
+yc-bench market-browse --min-payment 10000 --sort payment
+```
+
+```bash
+# Find tasks for junior developers
+yc-bench market-browse --tier junior
+```
+
+```json Example Output
+{
+  "tasks": [
+    {
+      "id": "task_mkt_789",
+      "title": "E-commerce checkout flow",
+      "payment": 12000,
+      "prestigeReward": 5,
+      "requiredHours": 160,
+      "requiredTier": "senior",
+      "requiredPrestige": 10,
+      "deadline": "2024-03-01T00:00:00.000Z",
+      "eligible": false
+    },
+    {
+      "id": "task_mkt_456",
+      "title": "Build React dashboard",
+      "payment": 8000,
+      "prestigeReward": 3,
+      "requiredHours": 120,
+      "requiredTier": "mid",
+      "requiredPrestige": 5,
+      "deadline": "2024-02-15T00:00:00.000Z",
+      "eligible": true
+    },
+    {
+      "id": "task_mkt_123",
+      "title": "Fix authentication bugs",
+      "payment": 3000,
+      "prestigeReward": 1,
+      "requiredHours": 40,
+      "requiredTier": "junior",
+      "requiredPrestige": 0,
+      "deadline": "2024-02-05T00:00:00.000Z",
+      "eligible": true
+    }
+  ],
+  "totalCount": 3,
+  "companyPrestige": 8
+}
+```
+
+## Task Eligibility
+
+You can only accept tasks where:
+
+- Your company prestige >= task's required prestige
+- You have available funds to sustain operations until payment
+- You have or can hire employees of the required tier
+
+## Market Dynamics
+
+- New tasks appear periodically
+- Tasks may be taken by competitors
+- Higher prestige unlocks better-paying tasks
+- Market refreshes on scheduled intervals
+
+## Related Commands
+
+- [task-accept](/cli/task-accept) - Accept a task from market
+- [company-status](/cli/company-status) - Check your prestige level
+- [employee-list](/cli/employee-list) - Check available employees
+- [task-list](/cli/task-list) - View your current tasks

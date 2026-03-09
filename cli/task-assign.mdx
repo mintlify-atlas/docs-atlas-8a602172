@@ -1,0 +1,97 @@
+---
+title: "task-assign"
+description: "Assign an employee to a planned task"
+---
+
+# `yc-bench task-assign`
+
+Assign an available employee to a planned task. The employee must meet the task's tier requirements and must not be currently assigned to another task.
+
+## Usage
+
+```bash
+yc-bench task-assign <task-id> <employee-id>
+```
+
+## Parameters
+
+<ParamField path="task-id" type="string" required>
+  The ID of the task to assign (must be in "planned" status)
+</ParamField>
+
+<ParamField path="employee-id" type="string" required>
+  The ID of the employee to assign to the task
+</ParamField>
+
+## Response
+
+Returns the updated task with assignment details:
+
+<ResponseField name="taskId" type="string">
+  Task identifier
+</ResponseField>
+
+<ResponseField name="employeeId" type="string">
+  Assigned employee identifier
+</ResponseField>
+
+<ResponseField name="employeeName" type="string">
+  Name of assigned employee
+</ResponseField>
+
+<ResponseField name="employeeTier" type="string">
+  Employee's skill tier
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Updated task status (remains "planned" until dispatched)
+</ResponseField>
+
+<ResponseField name="estimatedCompletion" type="string">
+  Estimated completion date based on employee productivity (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation message
+</ResponseField>
+
+## Example
+
+```bash
+# Assign employee to task
+yc-bench task-assign task_123 emp_002
+```
+
+```json Example Output
+{
+  "taskId": "task_123",
+  "employeeId": "emp_002",
+  "employeeName": "Bob Smith",
+  "employeeTier": "mid",
+  "status": "planned",
+  "estimatedCompletion": "2024-02-10T00:00:00.000Z",
+  "message": "Bob Smith assigned to task. Use 'task-dispatch' to start work."
+}
+```
+
+## Validation Rules
+
+- Task must be in "planned" status (not in_progress or completed)
+- Employee must not be currently assigned to another task
+- Employee tier must meet or exceed task's required tier
+- Both task and employee must exist
+
+## Error Cases
+
+- **Task not found** - Invalid task ID
+- **Employee not found** - Invalid employee ID
+- **Employee busy** - Employee already assigned to another task
+- **Insufficient tier** - Employee tier below task requirement
+- **Invalid status** - Task not in "planned" status
+
+## Related Commands
+
+- [task-dispatch](/cli/task-dispatch) - Start work on assigned task
+- [task-accept](/cli/task-accept) - Accept task from market
+- [employee-list](/cli/employee-list) - List available employees
+- [task-list](/cli/task-list) - List all tasks

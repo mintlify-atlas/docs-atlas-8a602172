@@ -1,0 +1,131 @@
+---
+title: "employee-list"
+description: "List all employees with tier, salary, and current assignments"
+---
+
+# `yc-bench employee-list`
+
+Display a comprehensive list of all employees including their tier, monthly salary, current task assignments, and availability status.
+
+## Usage
+
+```bash
+yc-bench employee-list [OPTIONS]
+```
+
+## Parameters
+
+<ParamField path="--tier" type="string" optional>
+  Filter by employee tier (junior, mid, senior, staff)
+</ParamField>
+
+<ParamField path="--available" type="boolean" optional>
+  Show only available (unassigned) employees
+</ParamField>
+
+<ParamField path="--assigned" type="boolean" optional>
+  Show only employees currently assigned to tasks
+</ParamField>
+
+## Response
+
+Returns array of employee objects:
+
+<ResponseField name="employees" type="array">
+  List of all employees
+</ResponseField>
+
+<ResponseField name="employees[].id" type="string">
+  Unique employee identifier
+</ResponseField>
+
+<ResponseField name="employees[].name" type="string">
+  Employee name
+</ResponseField>
+
+<ResponseField name="employees[].tier" type="string">
+  Skill tier: junior, mid, senior, or staff
+</ResponseField>
+
+<ResponseField name="employees[].monthlySalary" type="number">
+  Monthly salary in dollars
+</ResponseField>
+
+<ResponseField name="employees[].currentTask" type="string | null">
+  ID of currently assigned task, or null if available
+</ResponseField>
+
+<ResponseField name="employees[].productivity" type="number">
+  Productivity multiplier (0.8 - 1.2)
+</ResponseField>
+
+<ResponseField name="totalCount" type="number">
+  Total number of employees
+</ResponseField>
+
+<ResponseField name="availableCount" type="number">
+  Number of unassigned employees
+</ResponseField>
+
+## Example
+
+```bash
+# List all employees
+yc-bench employee-list
+```
+
+```bash
+# List only available employees
+yc-bench employee-list --available
+```
+
+```bash
+# List senior engineers
+yc-bench employee-list --tier senior
+```
+
+```json Example Output
+{
+  "employees": [
+    {
+      "id": "emp_001",
+      "name": "Alice Chen",
+      "tier": "senior",
+      "monthlySalary": 12000,
+      "currentTask": "task_123",
+      "productivity": 1.1
+    },
+    {
+      "id": "emp_002",
+      "name": "Bob Smith",
+      "tier": "mid",
+      "monthlySalary": 8000,
+      "currentTask": null,
+      "productivity": 0.95
+    },
+    {
+      "id": "emp_003",
+      "name": "Carol Wang",
+      "tier": "junior",
+      "monthlySalary": 5000,
+      "currentTask": "task_124",
+      "productivity": 0.85
+    }
+  ],
+  "totalCount": 3,
+  "availableCount": 1
+}
+```
+
+## Employee Tiers
+
+- **Junior** - Entry level, lower productivity, $4k-6k/month
+- **Mid** - Intermediate skills, $7k-9k/month
+- **Senior** - High skills, higher productivity, $10k-13k/month
+- **Staff** - Expert level, highest productivity, $14k+/month
+
+## Related Commands
+
+- [task-assign](/cli/task-assign) - Assign employee to task
+- [company-status](/cli/company-status) - Company overview
+- [task-list](/cli/task-list) - List all tasks

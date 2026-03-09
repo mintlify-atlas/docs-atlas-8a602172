@@ -1,0 +1,97 @@
+---
+title: "company-status"
+description: "Display current company funds, prestige, tasks, and payroll"
+---
+
+# `yc-bench company-status`
+
+Get a comprehensive overview of your company's current financial status, reputation, active tasks, and employee payroll obligations.
+
+## Usage
+
+```bash
+yc-bench company-status
+```
+
+## Parameters
+
+This command takes no parameters.
+
+## Response
+
+Returns current company metrics:
+
+<ResponseField name="funds" type="number">
+  Current available cash in dollars
+</ResponseField>
+
+<ResponseField name="prestige" type="number">
+  Current prestige score (reputation)
+</ResponseField>
+
+<ResponseField name="employeeCount" type="number">
+  Total number of employees
+</ResponseField>
+
+<ResponseField name="monthlyPayroll" type="number">
+  Total monthly salary obligations in dollars
+</ResponseField>
+
+<ResponseField name="activeTasks" type="number">
+  Number of tasks currently in progress
+</ResponseField>
+
+<ResponseField name="plannedTasks" type="number">
+  Number of accepted tasks not yet started
+</ResponseField>
+
+<ResponseField name="runwayMonths" type="number">
+  Months of runway at current burn rate
+</ResponseField>
+
+<ResponseField name="nextPayrollDate" type="string">
+  Date of next payroll payment (ISO 8601 format)
+</ResponseField>
+
+## Example
+
+```bash
+# Check company status
+yc-bench company-status
+```
+
+```json Example Output
+{
+  "funds": 47500,
+  "prestige": 8,
+  "employeeCount": 3,
+  "monthlyPayroll": 18000,
+  "activeTasks": 2,
+  "plannedTasks": 1,
+  "runwayMonths": 2.6,
+  "nextPayrollDate": "2024-02-01T00:00:00.000Z"
+}
+```
+
+```bash
+# Example formatted output
+=== Company Status ===
+Funds: $47,500
+Prestige: 8
+Employees: 3
+Monthly Payroll: $18,000
+Runway: 2.6 months
+
+Tasks:
+- Active: 2
+- Planned: 1
+
+Next Payroll: Feb 1, 2024
+```
+
+## Related Commands
+
+- [employee-list](/cli/employee-list) - List all employees
+- [task-list](/cli/task-list) - List all tasks
+- [finance-ledger](/cli/finance-ledger) - View transaction history
+- [report-monthly](/cli/report-monthly) - Monthly financial report

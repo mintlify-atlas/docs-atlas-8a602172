@@ -1,0 +1,291 @@
+---
+title: Installation
+description: Install YC-Bench and configure API keys for your LLM provider
+---
+
+## Prerequisites
+
+Before installing YC-Bench, ensure you have:
+
+- **Python 3.12 or higher** — YC-Bench uses modern Python features
+- **[uv](https://github.com/astral-sh/uv)** — Fast Python package manager (automatically installed by the quickstart script)
+- **API key** for at least one LLM provider (Anthropic, OpenAI, Google, OpenRouter, etc.)
+
+<Warning>
+Python 3.11 and earlier are **not supported**. Use Python 3.12+ for compatibility.
+</Warning>
+
+## Installation
+
+<Steps>
+
+<Step title="Install uv (if not already installed)">
+
+YC-Bench uses `uv` for fast dependency management. Install it with:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+After installation, add `uv` to your PATH:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Verify installation:
+
+```bash
+uv --version
+```
+
+</Step>
+
+<Step title="Clone the repository">
+
+```bash
+git clone https://github.com/collinear-ai/yc-bench.git
+cd yc-bench
+```
+
+</Step>
+
+<Step title="Install dependencies">
+
+```bash
+uv sync
+```
+
+This command:
+- Creates a virtual environment
+- Installs all required dependencies from `pyproject.toml`
+- Sets up the `yc-bench` CLI tool
+
+</Step>
+
+<Step title="Verify installation">
+
+Test that the CLI is available:
+
+```bash
+uv run yc-bench --help
+```
+
+You should see the YC-Bench command help output.
+
+</Step>
+
+</Steps>
+
+## API Key Setup
+
+YC-Bench uses [LiteLLM](https://github.com/BerriAI/litellm) to support multiple LLM providers. Configure your API key by creating a `.env` file in the project root.
+
+### Supported Providers
+
+<CodeGroup>
+
+```bash Anthropic (Claude)
+# .env
+ANTHROPIC_API_KEY="sk-ant-..."
+
+# Example models:
+# anthropic/claude-opus-4-6
+# anthropic/claude-sonnet-4-6
+# anthropic/claude-haiku-4-5-20251001
+```
+
+```bash OpenAI (GPT)
+# .env
+OPENAI_API_KEY="sk-..."
+
+# Example models:
+# openai/gpt-5.2
+# openai/gpt-5.1-mini
+# openai/gpt-4.1
+# openai/o4-mini
+```
+
+```bash Google (Gemini via OpenRouter)
+# .env
+OPENROUTER_API_KEY="sk-or-v1-..."
+
+# Example models:
+# openrouter/google/gemini-3.1-pro-preview
+# openrouter/google/gemini-3-flash-preview
+# openrouter/google/gemini-2.5-flash-preview:free
+```
+
+```bash OpenRouter (Multiple Providers)
+# .env
+OPENROUTER_API_KEY="sk-or-v1-..."
+
+# OpenRouter supports many providers:
+# openrouter/deepseek/deepseek-chat (DeepSeek V3)
+# openrouter/deepseek/deepseek-reasoner (DeepSeek R1)
+# openrouter/x-ai/grok-3-mini-fast
+# openrouter/qwen/qwen3-235b-a22b
+# openrouter/meta-llama/llama-4-scout
+# openrouter/mistralai/mistral-medium-3
+```
+
+```bash DeepSeek (via OpenRouter)
+# .env
+OPENROUTER_API_KEY="sk-or-v1-..."
+
+# Example models:
+# openrouter/deepseek/deepseek-chat
+# openrouter/deepseek/deepseek-reasoner
+```
+
+</CodeGroup>
+
+<Note>
+**Multiple keys**: You can include multiple provider keys in your `.env` file. YC-Bench will use the appropriate key based on the model you specify in the `--model` parameter.
+</Note>
+
+### Key Detection
+
+The YC-Bench interactive launcher (`yc-bench start`) automatically detects your key type by prefix:
+
+- `sk-ant-*` → Anthropic
+- `sk-or-*` → OpenRouter
+- `AIza*` → Google Gemini
+- `sk-*` → OpenAI
+
+## Verification
+
+Confirm your installation is working:
+
+<Steps>
+
+<Step title="Check CLI availability">
+
+```bash
+uv run yc-bench --help
+```
+
+Expected output:
+```
+Usage: yc-bench [OPTIONS] COMMAND [ARGS]...
+
+Commands:
+  run         Run a full benchmark
+  start       Interactive 3-step quickstart
+  company     Company status and info
+  employee    Employee management
+  market      Browse available tasks
+  task        Task operations
+  finance     Financial reports
+  report      Monthly P&L reports
+  sim         Simulation control
+  scratchpad  Persistent memory
+```
+
+</Step>
+
+<Step title="Test API key">
+
+Run a minimal test to verify your API key works:
+
+```bash
+uv run yc-bench start
+```
+
+The interactive wizard will:
+1. Detect your API key from `.env` or prompt for it
+2. Let you select a model
+3. Launch a test run
+
+Press `Ctrl+C` to exit after confirming the connection works.
+
+</Step>
+
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+
+<Accordion title="Command not found: uv">
+
+If `uv` is not found after installation:
+
+1. Ensure the install script completed successfully
+2. Add `uv` to your PATH:
+   ```bash
+   export PATH="$HOME/.local/bin:$PATH"
+   ```
+3. Restart your terminal or source your shell config:
+   ```bash
+   source ~/.bashrc  # or ~/.zshrc
+   ```
+
+</Accordion>
+
+<Accordion title="Python version error">
+
+If you see `requires-python = >=3.12` errors:
+
+1. Check your Python version:
+   ```bash
+   python3 --version
+   ```
+2. Install Python 3.12+ using your system package manager or [pyenv](https://github.com/pyenv/pyenv)
+3. Retry `uv sync`
+
+</Accordion>
+
+<Accordion title="API key not recognized">
+
+If your API key isn't detected:
+
+1. Verify the `.env` file is in the project root (same directory as `pyproject.toml`)
+2. Check for typos in the environment variable name
+3. Ensure no extra quotes or whitespace:
+   ```bash
+   # Correct
+   ANTHROPIC_API_KEY="sk-ant-..."
+   
+   # Incorrect
+   ANTHROPIC_API_KEY = "sk-ant-..."  # extra spaces
+   ANTHROPIC_API_KEY='sk-ant-...'    # single quotes (use double)
+   ```
+4. Test manually:
+   ```bash
+   source .env
+   echo $ANTHROPIC_API_KEY
+   ```
+
+</Accordion>
+
+<Accordion title="LiteLLM connection errors">
+
+If you encounter LiteLLM-related errors:
+
+1. Verify your API key is valid and has credits
+2. Check provider status pages for outages
+3. For OpenRouter, ensure your account has sufficient credits
+4. Try a different model from the same provider
+5. Check the [LiteLLM documentation](https://docs.litellm.ai/) for provider-specific issues
+
+</Accordion>
+
+<Accordion title="Database errors">
+
+YC-Bench uses SQLite by default. If you see database errors:
+
+1. Ensure the `db/` directory exists (created automatically on first run)
+2. Check file permissions: `ls -la db/`
+3. Delete old database files if upgrading: `rm db/*.db`
+4. For PostgreSQL support: `uv add yc-bench[postgres]` and set `DATABASE_URL` in `.env`
+
+</Accordion>
+
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Run your first benchmark with the interactive launcher
+</Card>

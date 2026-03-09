@@ -1,0 +1,404 @@
+---
+title: 'Prestige System'
+description: 'Understand the four-domain prestige system, decay mechanics, and prestige-scaled rewards'
+icon: 'medal'
+---
+
+## Overview
+
+Prestige is the **core progression mechanic** in YC-Bench. It represents your company's reputation and technical capability in four AI research domains. Higher prestige unlocks access to more valuable tasks, but comes with increased work requirements and decay pressure.
+
+## Four Domains
+
+Every company tracks prestige independently in four domains (from `src/yc_bench/db/models/company.py:12`):
+
+```python
+class Domain(str, Enum):
+    RESEARCH = "research"
+    INFERENCE = "inference"
+    DATA_ENVIRONMENT = "data_environment"
+    TRAINING = "training"
+```
+
+### Domain Semantics
+
+| Domain | Represents | Example Tasks |
+|--------|------------|---------------|
+| **Research** | Novel algorithm development, paper implementations | "Implement sparse attention mechanism", "Reproduce GPT-4 architecture" |
+| **Inference** | Model serving, optimization, deployment | "Optimize inference latency", "Deploy model to production" |
+| **Data/Environment** | Dataset curation, data pipelines, infrastructure | "Build training data pipeline", "Set up distributed training cluster" |
+| **Training** | Model training, hyperparameter tuning, stability | "Train 7B parameter model", "Optimize training stability" |
+
+<Info>
+  Domain names are for flavor — mechanically, they're interchangeable. What matters is **per-domain prestige tracking** and **multi-domain task requirements**.
+</Info>
+
+## Prestige Range
+
+Prestige levels range from **1.0 to 10.0** (enforced by database constraints in `src/yc_bench/db/models/company.py:38`):
+
+- **1.0**: Starting prestige (all domains)
+- **3.0–5.0**: Typical operating range for mid-game
+- **7.0–10.0**: Elite tier (highest-paying tasks, hardest to maintain)
+
+### Prestige Distribution
+
+```
+┌─────────┬──────────────────────────────────────┬──────────────┐
+│ Level   │ Market Access                        │ Difficulty   │
+├─────────┼──────────────────────────────────────┼──────────────┤
+│ 1.0-2.0 │ Entry-level tasks (low pay)          │ Easy         │
+│ 3.0-5.0 │ Majority of market (profitable)      │ Moderate     │
+│ 6.0-8.0 │ High-value tasks (requires focus)    │ Hard         │
+│ 9.0-10.0│ Elite tasks (razor-thin margins)     │ Very Hard    │
+└─────────┴──────────────────────────────────────┴──────────────┘
+```
+
+## Per-Domain Prestige Gating
+
+This is the **key mechanic** that prevents single-domain hyper-specialization.
+
+### Acceptance Rule (from `src/yc_bench/cli/task_commands.py:68`)
+
+When accepting a task:
+
+```python
+for req in task.requirements:  # Each domain the task requires
+    domain_prestige = company.prestige[req.domain]
+    if task.required_prestige > domain_prestige:
+        raise PrestigeError(
+            f"Company prestige in {req.domain} ({domain_prestige:.1f}) "
+            f"does not meet task requirement ({task.required_prestige})"
+        )
+```
+
+### Example
+
+Task "Train large language model":
+- Required prestige: **5**
+- Required domains: `[training, data_environment]`
+
+**Acceptance check**:
+```python
+if company.prestige.training >= 5 AND company.prestige.data_environment >= 5:
+    accept_task()
+else:
+    reject("Insufficient prestige")
+```
+
+You **cannot** accept this task if:
+- Training prestige = 6.0, Data prestige = 4.5 ❌
+- Training prestige = 5.0, Data prestige = 5.0 ✅
+
+<Warning>
+  Most tasks in **medium** and **hard** presets require 2 domains. Agents must maintain broad prestige across all four domains to access the full market.
+</Warning>
+
+## Prestige Levels (1.0 to 10.0)
+
+Prestige is stored as a `Decimal(6, 3)` — three decimal places of precision. Example: `5.125`.
+
+### Starting Prestige
+
+All domains start at **1.0** (from `default.toml:57`):
+
+```toml
+initial_prestige_level = 1.0
+```
+
+### Prestige Floor and Ceiling
+
+From `default.toml:68`:
+
+```toml
+prestige_min = 1.0
+prestige_max = 10.0
+```
+
+Prestige **cannot** fall below 1.0 or exceed 10.0.
+
+## Prestige Rewards
+
+Successful task completion awards prestige to **all domains** required by the task.
+
+### Reward Formula (from `src/yc_bench/core/handlers/task_complete.py:72`)
+
+```python
+if task.success:
+    for domain in task.requirements:
+        prestige_delta = task.reward_prestige_delta  # 0.0–0.35 (typical ~0.1)
+        company.prestige[domain] = min(
+            prestige_max,
+            company.prestige[domain] + prestige_delta
+        )
+```
+
+### Prestige Delta Distribution (from `default.toml:148`)
+
+```toml
+[world.dist.reward_prestige_delta]
+type = "beta"
+alpha = 1.2
+beta = 2.8
+low = 0.0
+high = 0.35
+```
+
+**Typical deltas**: 0.05–0.15 per domain per task.
+
+**Prestige climb example**:
+- Start: 1.0
+- Complete 5 tasks (avg +0.1 each): → 1.5
+- Complete 10 more tasks: → 2.5
+- Complete 20 more tasks: → 4.5
+
+<Info>
+  Climbing from prestige 1.0 → 5.0 in one domain takes **~40 successful tasks** on average (assuming `reward_prestige_delta ≈ 0.1`).
+</Info>
+
+## Prestige Decay Mechanics
+
+Prestige decays **continuously** at a rate of `prestige_decay_per_day` (default: 0.005/day).
+
+### Decay Formula (from `src/yc_bench/core/engine.py:108`)
+
+```python
+def apply_prestige_decay(db, company_id, days_elapsed):
+    decay_per_day = 0.005  # default
+    total_decay = decay_per_day * days_elapsed
+    floor = 1.0
+    
+    for domain in [research, inference, data_environment, training]:
+        company.prestige[domain] = max(
+            floor,
+            company.prestige[domain] - total_decay
+        )
+```
+
+### Decay Rates
+
+From `default.toml:83`:
+
+```toml
+prestige_decay_per_day = 0.005
+```
+
+**Monthly decay**: `0.005 × 30 = 0.15`
+
+**Annual decay**: `0.005 × 365 = 1.825`
+
+### Decay Examples
+
+| Starting Prestige | Days Idle | Final Prestige |
+|-------------------|-----------|----------------|
+| 5.0 | 30 (1 month) | 4.85 |
+| 5.0 | 180 (6 months) | 4.10 |
+| 5.0 | 365 (1 year) | 3.175 |
+| 2.0 | 200 | 1.0 (floored) |
+
+<Warning>
+  A domain left **untouched for 6 months** loses ~1.0 prestige level. Agents must stay active across all domains to maintain market access.
+</Warning>
+
+## Prestige-Scaled Rewards
+
+Higher-prestige tasks pay proportionally more, scaled by `reward_prestige_scale`.
+
+### Reward Scaling Formula (from `src/yc_bench/services/generate_tasks.py`)
+
+```python
+base_reward = sample_from_distribution(reward_funds_cents)  # e.g., $14,000
+scale = world_config.reward_prestige_scale  # 0.55 (default)
+prestige = task.required_prestige  # 1–10
+
+final_reward = base_reward * (1 + scale * (prestige - 1))
+```
+
+### Scaling Factor (from `default.toml:78`)
+
+```toml
+reward_prestige_scale = 0.55
+```
+
+### Reward Multiplier by Prestige
+
+| Prestige | Multiplier | Example ($14K base) |
+|----------|------------|---------------------|
+| 1 | 1.00× | $14,000 |
+| 3 | 2.10× | $29,400 |
+| 5 | 3.20× | $44,800 |
+| 7 | 4.30× | $60,200 |
+| 10 | 5.95× | $83,300 |
+
+<Info>
+  At `reward_prestige_scale = 0.55`, a **prestige-10 task pays ~6× more** than a prestige-1 task. This creates strong incentive to climb prestige despite decay pressure.
+</Info>
+
+## Prestige-Scaled Work Volume
+
+Higher-prestige tasks require **proportionally more work**, scaled by `prestige_qty_scale`.
+
+### Work Scaling Formula
+
+```python
+base_qty = sample_from_distribution(required_qty)  # e.g., 2000 units
+scale = world_config.prestige_qty_scale  # 0.3 (default)
+prestige = task.required_prestige  # 1–10
+
+final_qty = base_qty * (1 + scale * (prestige - 1))
+```
+
+### Scaling Factor (from `default.toml:88`)
+
+```toml
+prestige_qty_scale = 0.3
+```
+
+### Work Multiplier by Prestige
+
+| Prestige | Multiplier | Example (2000 base) |
+|----------|------------|---------------------|
+| 1 | 1.00× | 2,000 units |
+| 3 | 1.60× | 3,200 units |
+| 5 | 2.20× | 4,400 units |
+| 7 | 2.80× | 5,600 units |
+| 10 | 3.70× | 7,400 units |
+
+<Warning>
+  Higher prestige pays more **but demands proportionally more capacity**. A prestige-7 task pays 4.3× more but requires 2.8× more work. Net margin improves, but throughput pressure increases.
+</Warning>
+
+## Prestige Penalties
+
+Failing or cancelling a task applies a **prestige penalty** to all required domains.
+
+### Failure Penalty (from `src/yc_bench/core/handlers/task_complete.py:114`)
+
+```python
+if not task.success:  # Completed after deadline
+    penalty = penalty_fail_multiplier * task.reward_prestige_delta
+    for domain in task.requirements:
+        company.prestige[domain] = max(
+            prestige_min,
+            company.prestige[domain] - penalty
+        )
+```
+
+**Penalty multiplier** (from `default.toml:74`):
+
+```toml
+penalty_fail_multiplier = 1.4  # 1.4× the reward delta
+```
+
+**Example**:
+- Task reward: `+0.10` prestige per domain
+- Failure penalty: `-0.14` prestige per domain
+
+### Cancellation Penalty (from `src/yc_bench/cli/task_commands.py:398`)
+
+```python
+penalty = penalty_cancel_multiplier * task.reward_prestige_delta
+for domain in task.requirements:
+    company.prestige[domain] = max(
+        prestige_min,
+        company.prestige[domain] - penalty
+    )
+```
+
+**Penalty multiplier** (from `default.toml:74`):
+
+```toml
+penalty_cancel_multiplier = 2.0  # 2× the reward delta
+```
+
+**Example**:
+- Task reward: `+0.10` prestige per domain
+- Cancel penalty: `-0.20` prestige per domain
+
+<Warning>
+  Cancelling is **worse** than failing (2.0× vs. 1.4× penalty). Accepting a task is a real commitment — agents cannot freely "option" tasks without consequences.
+</Warning>
+
+## Prestige Strategy Implications
+
+### Broad vs. Narrow Specialization
+
+**Narrow strategy** (focus on 1–2 domains):
+- ✅ Climb prestige faster in chosen domains
+- ✅ Access high-paying tasks in those domains
+- ❌ Locked out of multi-domain tasks (most of the market)
+- ❌ Unused domains decay → further market restriction
+
+**Broad strategy** (maintain all 4 domains):
+- ✅ Access to full market (including 2–3 domain tasks)
+- ✅ Resilient to decay (constant activity in all domains)
+- ❌ Slower prestige climb (rewards split across domains)
+- ❌ Higher employee coordination complexity
+
+<Info>
+  In **medium** and **hard** presets, most tasks require 2 domains. Agents that specialize too narrowly will **starve** as their unused domains decay below market requirements.
+</Info>
+
+### Decay Mitigation
+
+To maintain prestige level `P` in a domain:
+
+```
+monthly_tasks_needed = (monthly_decay) / (avg_reward_prestige_delta)
+                     = 0.15 / 0.10
+                     = 1.5 tasks/month
+```
+
+To **climb** prestige while offsetting decay:
+
+```
+net_gain = (tasks_per_month × avg_delta) - monthly_decay
+         = (4 × 0.10) - 0.15
+         = +0.25/month
+```
+
+<Note>
+  Completing **~2 tasks per domain per month** maintains prestige. Completing **4+ tasks per domain per month** enables prestige growth.
+</Note>
+
+## Observing Prestige
+
+Agents can query current prestige via:
+
+```bash
+yc-bench company status
+```
+
+**Example output**:
+
+```json
+{
+  "company_id": "...",
+  "name": "BenchCo",
+  "funds_cents": 15000000,
+  "prestige": {
+    "research": 3.125,
+    "inference": 2.850,
+    "data_environment": 4.200,
+    "training": 3.675
+  },
+  "sim_time": "2025-06-15T14:30:00Z"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Task Management" icon="list-check" href="/concepts/task-management">
+    Learn how prestige affects task acceptance and deadline calculations.
+  </Card>
+  <Card title="Employee System" icon="users" href="/concepts/employee-system">
+    Understand how employees contribute to tasks across domains.
+  </Card>
+  <Card title="Scoring" icon="chart-line" href="/concepts/scoring">
+    Learn how prestige levels factor into final benchmark scores.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Tune prestige decay, rewards, and penalties in your presets.
+  </Card>
+</CardGroup>

@@ -1,0 +1,102 @@
+---
+title: "task-accept"
+description: "Accept a task from the market and add it to your company"
+---
+
+# `yc-bench task-accept`
+
+Accept an available task from the market, adding it to your company's task list in "planned" status.
+
+## Usage
+
+```bash
+yc-bench task-accept <task-id>
+```
+
+## Parameters
+
+<ParamField path="task-id" type="string" required>
+  The ID of the task to accept from the market
+</ParamField>
+
+## Response
+
+Returns the accepted task details:
+
+<ResponseField name="taskId" type="string">
+  Unique task identifier
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Task title/description
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Task status (will be "planned")
+</ResponseField>
+
+<ResponseField name="payment" type="number">
+  Payment in dollars upon completion
+</ResponseField>
+
+<ResponseField name="prestigeReward" type="number">
+  Prestige points gained upon completion
+</ResponseField>
+
+<ResponseField name="requiredHours" type="number">
+  Estimated hours to complete
+</ResponseField>
+
+<ResponseField name="requiredTier" type="string">
+  Minimum employee tier required (junior, mid, senior, staff)
+</ResponseField>
+
+<ResponseField name="deadline" type="string">
+  Task deadline (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation message
+</ResponseField>
+
+## Example
+
+```bash
+# Accept a task from the market
+yc-bench task-accept task_mkt_456
+```
+
+```json Example Output
+{
+  "taskId": "task_mkt_456",
+  "title": "Build React dashboard for analytics",
+  "status": "planned",
+  "payment": 8000,
+  "prestigeReward": 3,
+  "requiredHours": 120,
+  "requiredTier": "mid",
+  "deadline": "2024-02-15T00:00:00.000Z",
+  "message": "Task accepted! Use 'task-assign' to assign an employee."
+}
+```
+
+## Task Status Flow
+
+1. **market** - Available in market (before acceptance)
+2. **planned** - Accepted but not started (after this command)
+3. **in_progress** - Employee assigned and working
+4. **completed** - Finished successfully
+5. **cancelled** - Cancelled (prestige penalty)
+
+## Error Cases
+
+- **Task not found** - Invalid task ID or already accepted
+- **Insufficient prestige** - Task requires higher prestige
+- **Already accepted** - Task already in company task list
+
+## Related Commands
+
+- [market-browse](/cli/market-browse) - Browse available tasks
+- [task-assign](/cli/task-assign) - Assign employee to task
+- [task-dispatch](/cli/task-dispatch) - Start work on task
+- [task-list](/cli/task-list) - List company tasks

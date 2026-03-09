@@ -1,0 +1,94 @@
+---
+title: "sim-resume"
+description: "Advance simulation time to the next scheduled event"
+---
+
+# `yc-bench sim-resume`
+
+Advance the simulation clock to the next scheduled event (task completion, payroll, market refresh, etc.).
+
+## Usage
+
+```bash
+yc-bench sim-resume
+```
+
+## Parameters
+
+This command takes no parameters.
+
+## Response
+
+Returns the updated simulation state after advancing time:
+
+<ResponseField name="currentTick" type="number">
+  New current tick after time advancement
+</ResponseField>
+
+<ResponseField name="currentDate" type="string">
+  New current date (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="ticksAdvanced" type="number">
+  Number of ticks that were advanced
+</ResponseField>
+
+<ResponseField name="eventsProcessed" type="array">
+  List of events that occurred during time advancement
+</ResponseField>
+
+<ResponseField name="company" type="object">
+  Updated company state
+</ResponseField>
+
+<ResponseField name="market" type="object">
+  Updated market state
+</ResponseField>
+
+## Example
+
+```bash
+# Advance to next event
+yc-bench sim-resume
+```
+
+```json Example Output
+{
+  "currentTick": 240,
+  "currentDate": "2024-01-11T00:00:00.000Z",
+  "ticksAdvanced": 240,
+  "eventsProcessed": [
+    {
+      "type": "TASK_COMPLETED",
+      "taskId": "task_123",
+      "tick": 240,
+      "payment": 5000,
+      "prestigeGain": 2
+    }
+  ],
+  "company": {
+    "funds": 55000,
+    "prestige": 2,
+    "employees": [...],
+    "tasks": [...]
+  },
+  "market": {
+    "availableTasks": [...]
+  }
+}
+```
+
+## Event Types
+
+Common events that trigger time advancement:
+
+- **TASK_COMPLETED** - Employee finishes assigned task
+- **PAYROLL_DUE** - Monthly salary payments processed
+- **MARKET_REFRESH** - New tasks added to market
+- **TASK_DEADLINE** - Task deadline reached
+
+## Related Commands
+
+- [task-inspect](/cli/task-inspect) - Check task progress
+- [company-status](/cli/company-status) - View current state
+- [finance-ledger](/cli/finance-ledger) - See financial transactions

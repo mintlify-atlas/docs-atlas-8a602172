@@ -1,0 +1,602 @@
+---
+title: Parameters
+description: Complete reference of all tunable parameters in YC-Bench
+---
+
+This page documents every parameter available in YC-Bench configuration files. All parameters are defined in `default.toml`, which serves as the canonical reference.
+
+<Note>
+**Location**: `src/yc_bench/config/presets/default.toml`
+
+Every parameter is explicitly listed in the default preset so this file doubles as complete documentation.
+</Note>
+
+---
+
+## Top-Level Fields
+
+These fields identify and describe your experiment.
+
+<ParamField path="name" type="string" required>
+  Experiment name, used in output filenames and logs.
+  
+  **Default**: `"default"`
+</ParamField>
+
+<ParamField path="description" type="string">
+  Human-readable description of what this configuration tests.
+  
+  **Default**: `"Hardened 3-year benchmark. Most tasks require prestige 3-5, 2-domain work, tight deadlines, costly cancellations."`
+</ParamField>
+
+<ParamField path="extends" type="string">
+  Name of another preset to inherit from. All presets except `default` use `extends = "default"` to inherit base parameters.
+  
+  **Example**: `extends = "default"`
+</ParamField>
+
+---
+
+## Agent Configuration
+
+The `[agent]` section configures the LLM agent behavior.
+
+<ParamField path="agent.model" type="string" required>
+  LLM model identifier. Supports OpenRouter format.
+  
+  **Default**: `"openrouter/z-ai/glm-5"`
+  
+  **Example**: `"openrouter/anthropic/claude-3.5-sonnet"`
+</ParamField>
+
+<ParamField path="agent.temperature" type="float">
+  Sampling temperature for model responses.
+  
+  **Default**: `0.0`
+  
+  **Range**: `0.0` (deterministic) to `1.0` (creative)
+</ParamField>
+
+<ParamField path="agent.top_p" type="float">
+  Nucleus sampling parameter.
+  
+  **Default**: `1.0`
+  
+  **Range**: `0.0` to `1.0`
+</ParamField>
+
+<ParamField path="agent.request_timeout_seconds" type="float">
+  Timeout for each LLM API request.
+  
+  **Default**: `300.0` (5 minutes)
+</ParamField>
+
+<ParamField path="agent.retry_max_attempts" type="integer">
+  Maximum retry attempts for failed API requests.
+  
+  **Default**: `3`
+</ParamField>
+
+<ParamField path="agent.retry_backoff_seconds" type="float">
+  Initial backoff delay between retries (exponential backoff).
+  
+  **Default**: `1.0`
+</ParamField>
+
+<ParamField path="agent.history_keep_rounds" type="integer">
+  Number of conversation rounds retained in context before each API call. Older rounds are dropped proactively. The scratchpad survives truncation.
+  
+  **Default**: `20`
+</ParamField>
+
+<ParamField path="agent.system_prompt" type="string">
+  Optional system prompt override. Omit to use the built-in prompt.
+  
+  **Default**: *(built-in prompt used)*
+</ParamField>
+
+---
+
+## Loop Configuration
+
+The `[loop]` section controls the agent interaction loop.
+
+<ParamField path="loop.auto_advance_after_turns" type="integer">
+  Consecutive turns without `sim resume` before the loop forces a time-advance.
+  
+  **Default**: `10`
+  
+  **Purpose**: Prevents agents from getting stuck in analysis loops without advancing simulation time.
+</ParamField>
+
+<ParamField path="loop.max_turns" type="integer">
+  Hard cap on total turns. Comment out or set to a large number for unlimited.
+  
+  **Default**: *(unlimited)*
+  
+  **Example**: `max_turns = 500`
+</ParamField>
+
+---
+
+## Simulation Parameters
+
+The `[sim]` section defines the simulation timeline.
+
+<ParamField path="sim.start_date" type="string" required>
+  Simulation start date in ISO 8601 format.
+  
+  **Default**: `"2025-01-01"`
+  
+  **Format**: `YYYY-MM-DD`
+</ParamField>
+
+<ParamField path="sim.horizon_years" type="integer" required>
+  Simulation duration in years.
+  
+  **Default**: `3`
+  
+  **Tutorial/Easy/Medium/Hard/Nightmare**: `1`
+</ParamField>
+
+<ParamField path="sim.company_name" type="string">
+  Name of the company in the simulation.
+  
+  **Default**: `"BenchCo"`
+</ParamField>
+
+---
+
+## World Parameters
+
+The `[world]` section contains scalar world-generation parameters.
+
+### Team & Resources
+
+<ParamField path="world.num_employees" type="integer" required>
+  Number of employees in the company.
+  
+  **Default**: `10`
+</ParamField>
+
+<ParamField path="world.initial_funds_cents" type="integer" required>
+  Starting cash in cents.
+  
+  **Default**: `15_000_000` ($150,000)
+  
+  **Tutorial**: `25_000_000` ($250,000)
+  
+  **Hard**: `10_000_000` ($100,000)
+  
+  **Nightmare**: `8_000_000` ($80,000)
+</ParamField>
+
+<ParamField path="world.initial_prestige_level" type="float">
+  Starting prestige level for all domains.
+  
+  **Default**: `1.0`
+</ParamField>
+
+<ParamField path="world.work_hours_per_day" type="float">
+  Business hours per day that employees work.
+  
+  **Default**: `9.0`
+</ParamField>
+
+### Market
+
+<ParamField path="world.num_market_tasks" type="integer">
+  Total number of tasks generated in the market.
+  
+  **Default**: `200`
+</ParamField>
+
+<ParamField path="world.market_browse_default_limit" type="integer">
+  Default number of tasks shown when browsing the market.
+  
+  **Default**: `50`
+</ParamField>
+
+### Salary & Prestige Mechanics
+
+<ParamField path="world.salary_bump_pct" type="float">
+  Salary increase percentage per completed task for each assigned employee. Compounds over time, accelerating payroll pressure.
+  
+  **Default**: `0.01` (1% per task)
+  
+  **Tutorial**: `0.0` (no compounding)
+  
+  **Nightmare**: `0.02` (2% per task - aggressive)
+</ParamField>
+
+<ParamField path="world.prestige_max" type="float">
+  Maximum prestige level.
+  
+  **Default**: `10.0`
+</ParamField>
+
+<ParamField path="world.prestige_min" type="float">
+  Minimum prestige level.
+  
+  **Default**: `1.0`
+</ParamField>
+
+<ParamField path="world.penalty_fail_multiplier" type="float">
+  Prestige penalty multiplier when a task fails (misses deadline).
+  
+  **Default**: `1.4` (hardened)
+  
+  **Tutorial**: `0.3` (negligible)
+  
+  **Nightmare**: `2.0` (catastrophic)
+  
+  **Interpretation**: Higher values mean failing tasks costs MORE prestige. Canceling is worse than failing in default config.
+</ParamField>
+
+<ParamField path="world.penalty_cancel_multiplier" type="float">
+  Prestige penalty multiplier when a task is canceled.
+  
+  **Default**: `2.0` (hardened)
+  
+  **Tutorial**: `0.5` (negligible)
+  
+  **Nightmare**: `2.5` (catastrophic)
+  
+  **Interpretation**: Accepting is a real commitment, not a free option.
+</ParamField>
+
+<ParamField path="world.reward_prestige_scale" type="float">
+  Extra reward fraction per prestige level above 1.
+  
+  **Default**: `0.55`
+  
+  **Formula**: `reward_multiplier = 1 + scale × (prestige - 1)`
+  
+  **Example**: At scale=0.55, a prestige-8 task pays `1 + 0.55×7 = 4.85×` more than prestige-1.
+</ParamField>
+
+<ParamField path="world.prestige_decay_per_day" type="float">
+  Daily prestige decay per domain. Domains not exercised lose prestige over time.
+  
+  **Default**: `0.005` (-0.15/month, ~1 level lost every 6 months)
+  
+  **Purpose**: Prevents single-domain hyper-specialization.
+</ParamField>
+
+<ParamField path="world.prestige_qty_scale" type="float">
+  Required quantity scaling by prestige level.
+  
+  **Default**: `0.3`
+  
+  **Formula**: `qty_multiplier = 1 + scale × (prestige - 1)`
+  
+  **Example**: At scale=0.3, prestige-5 tasks need `1 + 0.3×4 = 2.2×` the work of prestige-1 tasks.
+</ParamField>
+
+### Deadlines
+
+<ParamField path="world.deadline_qty_per_day" type="float">
+  Quantity units processed per business day when calculating deadlines.
+  
+  **Default**: `200.0`
+  
+  **Formula**: `deadline = max(deadline_min_biz_days, max_domain_qty / deadline_qty_per_day)`
+  
+  **Note**: Domains are worked in parallel, so deadline scales with the heaviest domain, not the sum.
+</ParamField>
+
+<ParamField path="world.deadline_min_biz_days" type="integer">
+  Minimum deadline in business days.
+  
+  **Default**: `7`
+</ParamField>
+
+### Progress & Business Hours
+
+<ParamField path="world.task_progress_milestones" type="array">
+  Progress fractions that trigger checkpoint events.
+  
+  **Default**: `[0.25, 0.5, 0.75]`
+</ParamField>
+
+<ParamField path="world.workday_start_hour" type="integer">
+  Business day start hour (24-hour format).
+  
+  **Default**: `9`
+</ParamField>
+
+<ParamField path="world.workday_end_hour" type="integer">
+  Business day end hour (24-hour format).
+  
+  **Default**: `18`
+</ParamField>
+
+---
+
+## Distribution Types
+
+YC-Bench uses statistical distributions to generate random quantities like task prestige, reward amounts, and work volumes. Each `[world.dist.<name>]` section specifies one distribution.
+
+### Available Distribution Types
+
+<Tabs>
+  <Tab title="triangular">
+    Triangular distribution with a mode (peak). Most values cluster around the mode.
+    
+    **Parameters**:
+    - `type = "triangular"`
+    - `low` (float/int): Minimum value
+    - `high` (float/int): Maximum value
+    - `mode` (float/int): Most likely value (peak)
+    
+    **Example**:
+    ```toml
+    [world.dist.required_prestige]
+    type = "triangular"
+    low  = 1
+    high = 10
+    mode = 4    # Most tasks need prestige 3-5
+    ```
+  </Tab>
+  
+  <Tab title="beta">
+    Beta distribution, rescaled to `[low, high]`. Flexible shape controlled by alpha/beta.
+    
+    **Parameters**:
+    - `type = "beta"`
+    - `alpha` (float): Shape parameter
+    - `beta` (float): Shape parameter
+    - `scale` (float): Rescaling factor
+    - `low` (float): Minimum value
+    - `high` (float): Maximum value
+    
+    **Example**:
+    ```toml
+    [world.dist.reward_prestige_delta]
+    type  = "beta"
+    alpha = 1.2
+    beta  = 2.8
+    scale = 0.35
+    low   = 0.0
+    high  = 0.35
+    ```
+  </Tab>
+  
+  <Tab title="normal">
+    Normal (Gaussian) distribution, clamped to `[low, high]`.
+    
+    **Parameters**:
+    - `type = "normal"`
+    - `mean` (float): Mean value
+    - `stdev` (float): Standard deviation
+    - `low` (float): Minimum value (clamp)
+    - `high` (float): Maximum value (clamp)
+    
+    **Example**:
+    ```toml
+    [world.dist.skill_boost]
+    type  = "normal"
+    mean  = 0.12    # Average 12% boost
+    stdev = 0.06
+    low   = 0.01
+    high  = 0.40
+    ```
+  </Tab>
+  
+  <Tab title="uniform">
+    Uniform distribution - all values equally likely.
+    
+    **Parameters**:
+    - `type = "uniform"`
+    - `low` (float/int): Minimum value
+    - `high` (float/int): Maximum value
+    
+    **Example**:
+    ```toml
+    [world.dist.example]
+    type = "uniform"
+    low  = 100
+    high = 500
+    ```
+  </Tab>
+  
+  <Tab title="constant">
+    Constant value - no randomness.
+    
+    **Parameters**:
+    - `type = "constant"`
+    - `value` (float/int): Fixed value
+    
+    **Example**:
+    ```toml
+    [world.dist.required_prestige]
+    type = "constant"
+    value = 1    # ALL tasks are prestige-1
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## World Distributions
+
+These distributions define random task properties generated during world creation.
+
+### Required Prestige
+
+<ParamField path="world.dist.required_prestige" type="distribution" required>
+  Prestige level required to accept a task (cast to int after sampling).
+  
+  **Default (hardened)**:
+  ```toml
+  type = "triangular"
+  low  = 1
+  high = 10
+  mode = 4    # Most tasks need prestige 3-5
+  ```
+  
+  **Tutorial**:
+  ```toml
+  type = "constant"
+  value = 1    # ALL tasks accessible immediately
+  ```
+</ParamField>
+
+### Reward Funds
+
+<ParamField path="world.dist.reward_funds_cents" type="distribution" required>
+  Base reward paid on task completion, in cents. Scaled further by prestige.
+  
+  **Default**:
+  ```toml
+  type = "triangular"
+  low  = 300_000      # $3,000
+  high = 4_000_000    # $40,000
+  mode = 1_400_000    # $14,000
+  ```
+  
+  **Economics**: Mode $14K means prestige-1 tasks burn cash, prestige-3 breaks even, prestige-4+ profits.
+</ParamField>
+
+### Domain Count
+
+<ParamField path="world.dist.domain_count" type="distribution" required>
+  Number of domains each task requires work in (cast to int after sampling).
+  
+  **Default (hardened)**:
+  ```toml
+  type = "triangular"
+  low  = 1
+  high = 3
+  mode = 2    # Most tasks need 2 domains
+  ```
+  
+  **Tutorial**:
+  ```toml
+  type = "constant"
+  value = 1    # Single-domain only
+  ```
+</ParamField>
+
+### Required Quantity
+
+<ParamField path="world.dist.required_qty" type="distribution" required>
+  Work units required per domain per task (cast to int after sampling).
+  
+  **Default (hardened)**:
+  ```toml
+  type = "triangular"
+  low  = 800          # No trivially small tasks
+  high = 4000
+  mode = 2000         # Substantial work required
+  ```
+  
+  **Nightmare**:
+  ```toml
+  low  = 1200
+  high = 5000
+  mode = 2500         # Massive work volumes
+  ```
+</ParamField>
+
+### Prestige Delta Reward
+
+<ParamField path="world.dist.reward_prestige_delta" type="distribution" required>
+  Prestige delta awarded per domain on task success.
+  
+  **Default**:
+  ```toml
+  type  = "beta"
+  alpha = 1.2
+  beta  = 2.8
+  scale = 0.35
+  low   = 0.0
+  high  = 0.35    # Mean ~0.1: climbing 1→5 takes ~40 tasks
+  ```
+</ParamField>
+
+### Skill Boost
+
+<ParamField path="world.dist.skill_boost" type="distribution" required>
+  Skill rate boost applied to each assigned employee on task success. Expressed as a fraction of current rate.
+  
+  **Default**:
+  ```toml
+  type  = "normal"
+  mean  = 0.12    # Average 12% boost
+  stdev = 0.06
+  low   = 0.01
+  high  = 0.40
+  ```
+</ParamField>
+
+---
+
+## Salary Tiers
+
+Three salary tier sections define employee distributions. **All three `share` values must sum to exactly 1.0.**
+
+### Junior Tier
+
+<ParamField path="world.salary_junior" type="object" required>
+  Configuration for junior employees.
+  
+  **Default**:
+  ```toml
+  [world.salary_junior]
+  name       = "junior"
+  share      = 0.50       # 50% of employees
+  min_cents  = 200_000    # $2,000/month
+  max_cents  = 400_000    # $4,000/month
+  rate_min   = 1.0        # units/hour
+  rate_max   = 4.0
+  ```
+</ParamField>
+
+### Mid Tier
+
+<ParamField path="world.salary_mid" type="object" required>
+  Configuration for mid-level employees.
+  
+  **Default**:
+  ```toml
+  [world.salary_mid]
+  name       = "mid"
+  share      = 0.35       # 35% of employees
+  min_cents  = 600_000    # $6,000/month
+  max_cents  = 800_000    # $8,000/month
+  rate_min   = 4.0
+  rate_max   = 7.0
+  ```
+</ParamField>
+
+### Senior Tier
+
+<ParamField path="world.salary_senior" type="object" required>
+  Configuration for senior employees.
+  
+  **Default**:
+  ```toml
+  [world.salary_senior]
+  name       = "senior"
+  share      = 0.15       # 15% of employees
+  min_cents  = 1_000_000  # $10,000/month
+  max_cents  = 1_500_000  # $15,000/month
+  rate_min   = 7.0
+  rate_max   = 10.0
+  ```
+</ParamField>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Presets" icon="layer-group" href="/configuration/presets">
+    See how presets combine these parameters into coherent challenges
+  </Card>
+  
+  <Card title="Tuning" icon="wrench" href="/configuration/tuning">
+    Learn how to create custom presets by overriding parameters
+  </Card>
+</CardGroup>
