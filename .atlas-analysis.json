@@ -1,0 +1,127 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "YC-Bench",
+  "projectDescription": "Long-horizon deterministic benchmark for LLM agents simulating an AI startup CEO over 1-3 years",
+  "theme": "aspen",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/how-it-works",
+              "concepts/simulation-mechanics",
+              "concepts/prestige-system",
+              "concepts/task-management",
+              "concepts/employee-system",
+              "concepts/scoring"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/presets",
+              "configuration/parameters",
+              "configuration/tuning"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/architecture",
+              "development/contributing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Main Commands",
+            "pages": [
+              "cli/run",
+              "cli/start"
+            ]
+          },
+          {
+            "group": "Simulation",
+            "pages": [
+              "cli/sim-resume"
+            ]
+          },
+          {
+            "group": "Company Management",
+            "pages": [
+              "cli/company-status",
+              "cli/employee-list"
+            ]
+          },
+          {
+            "group": "Task Operations",
+            "pages": [
+              "cli/task-accept",
+              "cli/task-assign",
+              "cli/task-dispatch",
+              "cli/task-cancel",
+              "cli/task-list",
+              "cli/task-inspect"
+            ]
+          },
+          {
+            "group": "Market & Finance",
+            "pages": [
+              "cli/market-browse",
+              "cli/finance-ledger",
+              "cli/report-monthly"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "cli/scratchpad"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Long-horizon deterministic benchmark testing agent coherence over hundreds of turns",
+    "SQLite-backed discrete-event simulation of AI startup operations",
+    "Multi-domain prestige system with decay mechanics",
+    "Employee productivity inference through hidden skill rates",
+    "Compounding decisions with deadline pressure and cash flow management",
+    "Five difficulty presets from tutorial to nightmare mode"
+  ],
+  "publicApiSurface": [
+    "yc-bench run --model <model> --seed <seed> --config <preset>",
+    "yc-bench start",
+    "yc-bench sim resume",
+    "yc-bench company status",
+    "yc-bench employee list",
+    "yc-bench market browse [--domain <domain>] [--limit <n>]",
+    "yc-bench task accept --task-id <uuid>",
+    "yc-bench task assign --task-id <uuid> --employee-id <uuid>",
+    "yc-bench task dispatch --task-id <uuid>",
+    "yc-bench task cancel --task-id <uuid> --reason <text>",
+    "yc-bench task list [--status <status>]",
+    "yc-bench task inspect --task-id <uuid>",
+    "yc-bench finance ledger",
+    "yc-bench report monthly",
+    "yc-bench scratchpad write/append/clear"
+  ]
+}
